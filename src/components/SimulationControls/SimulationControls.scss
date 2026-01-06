@@ -1,0 +1,217 @@
+.simulation-controls {
+  &__run-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.15s, opacity 0.15s;
+
+    &--primary {
+      background: var(--qamposer-accent, #4285f4);
+      color: white;
+
+      &:hover:not(:disabled) {
+        background: var(--qamposer-accent-hover, #3367d6);
+      }
+    }
+
+    &--secondary {
+      background: var(--qamposer-bg-secondary, #262626);
+      color: var(--qamposer-text-primary, #f4f4f4);
+      border: 1px solid var(--qamposer-border, #525252);
+
+      &:hover:not(:disabled) {
+        background: var(--qamposer-hover, rgba(255, 255, 255, 0.1));
+      }
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__spinner {
+    animation: spin 1s linear infinite;
+  }
+
+  &__overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  &__dialog {
+    background: var(--qamposer-bg-secondary, #262626);
+    border: 1px solid var(--qamposer-border, #525252);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  &__dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--qamposer-border, #525252);
+
+    h2 {
+      margin: 0;
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--qamposer-text-primary, #f4f4f4);
+    }
+  }
+
+  &__close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--qamposer-text-secondary, #a8a8a8);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--qamposer-hover, rgba(255, 255, 255, 0.1));
+      color: var(--qamposer-text-primary, #f4f4f4);
+    }
+  }
+
+  &__dialog-content {
+    padding: 1.5rem;
+  }
+
+  &__section {
+    margin-bottom: 1.5rem;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    h3 {
+      margin: 0 0 1rem 0;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--qamposer-text-primary, #f4f4f4);
+    }
+  }
+
+  &__field {
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--qamposer-text-secondary, #a8a8a8);
+    }
+
+    input {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.875rem;
+      color: var(--qamposer-text-primary, #f4f4f4);
+      background: var(--qamposer-bg-primary, #161616);
+      border: 1px solid var(--qamposer-border, #525252);
+      border-radius: 4px;
+
+      &:focus {
+        outline: 2px solid var(--qamposer-accent, #4285f4);
+        outline-offset: -2px;
+      }
+    }
+  }
+
+  &__backend {
+    padding: 1rem;
+    background: var(--qamposer-bg-primary, #161616);
+    border: 1px solid var(--qamposer-border, #525252);
+    border-radius: 4px;
+  }
+
+  &__backend-name {
+    margin: 0 0 0.25rem 0;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--qamposer-text-primary, #f4f4f4);
+  }
+
+  &__backend-desc {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--qamposer-text-secondary, #a8a8a8);
+  }
+
+  &__dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--qamposer-border, #525252);
+  }
+
+  &__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+
+    &--primary {
+      background: var(--qamposer-accent, #4285f4);
+      color: white;
+
+      &:hover:not(:disabled) {
+        background: var(--qamposer-accent-hover, #3367d6);
+      }
+    }
+
+    &--secondary {
+      background: transparent;
+      color: var(--qamposer-text-primary, #f4f4f4);
+      border: 1px solid var(--qamposer-border, #525252);
+
+      &:hover:not(:disabled) {
+        background: var(--qamposer-hover, rgba(255, 255, 255, 0.1));
+      }
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

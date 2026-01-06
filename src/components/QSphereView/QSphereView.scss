@@ -1,0 +1,72 @@
+.qsphere-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--qamposer-bg-secondary, #262626);
+
+  &__placeholder {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: var(--qamposer-text-secondary, #a8a8a8);
+    padding: 2rem;
+    text-align: center;
+
+    p {
+      font-size: 0.875rem;
+      max-width: 250px;
+    }
+  }
+
+  &__controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--qamposer-border, #525252);
+    flex-shrink: 0;
+  }
+
+  &__toggles {
+    display: flex;
+    gap: 1rem;
+  }
+
+  &__checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--qamposer-text-primary, #f4f4f4);
+    cursor: pointer;
+
+    input[type='checkbox'] {
+      width: 14px;
+      height: 14px;
+      accent-color: var(--qamposer-accent, #4285f4);
+      cursor: pointer;
+    }
+  }
+
+  &__reset-btn {
+    padding: 0.25rem 0.75rem;
+    border: none;
+    background: transparent;
+    color: var(--qamposer-accent, #4285f4);
+    font-size: 0.75rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.15s;
+
+    &:hover {
+      background: var(--qamposer-hover, rgba(255, 255, 255, 0.1));
+    }
+  }
+
+  &__plot {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+}

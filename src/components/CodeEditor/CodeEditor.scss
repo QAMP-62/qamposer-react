@@ -1,0 +1,133 @@
+.code-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--qamposer-bg-secondary, #262626);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--qamposer-border, #525252);
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  &__title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--qamposer-text-primary, #f4f4f4);
+
+    svg {
+      color: var(--qamposer-text-secondary, #a8a8a8);
+    }
+  }
+
+  &__format {
+    select {
+      min-width: 120px;
+      height: 2rem;
+      padding: 0 2rem 0 0.75rem;
+      font-size: 0.75rem;
+      color: var(--qamposer-text-primary, #f4f4f4);
+      background: var(--qamposer-bg-primary, #161616);
+      border: 1px solid var(--qamposer-border, #525252);
+      border-radius: 4px;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23a8a8a8' d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.5rem center;
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      &:focus {
+        outline: 2px solid var(--qamposer-accent, #4285f4);
+        outline-offset: -2px;
+      }
+    }
+  }
+
+  &__body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    min-height: 0;
+    background: var(--qamposer-bg-tertiary, #1a1a1a);
+    border: 1px solid transparent;
+
+    &--error {
+      border-color: var(--qamposer-error, #da1e28);
+    }
+  }
+
+  &__line-numbers {
+    flex-shrink: 0;
+    padding: 0.75rem 0;
+    background: var(--qamposer-bg-secondary, #262626);
+    border-right: 1px solid var(--qamposer-border, #525252);
+    overflow: hidden;
+    user-select: none;
+  }
+
+  &__line-number {
+    padding: 0 0.75rem;
+    font-family: 'IBM Plex Mono', 'Consolas', 'Monaco', monospace;
+    font-size: 0.75rem;
+    line-height: 1.5rem;
+    color: var(--qamposer-text-tertiary, #6f6f6f);
+    text-align: right;
+    min-width: 2.5rem;
+  }
+
+  &__textarea {
+    flex: 1;
+    padding: 0.75rem;
+    font-family: 'IBM Plex Mono', 'Consolas', 'Monaco', monospace;
+    font-size: 0.75rem;
+    line-height: 1.5rem;
+    color: var(--qamposer-text-primary, #f4f4f4);
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    overflow: auto;
+    white-space: pre;
+    tab-size: 2;
+
+    &::placeholder {
+      color: var(--qamposer-text-tertiary, #6f6f6f);
+    }
+
+    &:focus {
+      outline: none;
+    }
+
+    &[readonly] {
+      cursor: default;
+    }
+  }
+
+  &__error {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    color: var(--qamposer-error, #da1e28);
+    background: rgba(218, 30, 40, 0.1);
+    border-top: 1px solid var(--qamposer-error, #da1e28);
+  }
+
+  &__error-icon {
+    flex-shrink: 0;
+  }
+}
