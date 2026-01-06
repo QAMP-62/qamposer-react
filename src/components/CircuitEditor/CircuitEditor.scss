@@ -1,7 +1,7 @@
 .circuit-editor {
   flex: 1;
   background: var(--qamposer-bg-secondary, #262626);
-  overflow: hidden;
+  overflow: auto; // Allow vertical scroll when qubits overflow
   position: relative;
   height: 100%;
 
@@ -9,7 +9,7 @@
     position: relative;
     display: flex;
     width: 100%;
-    height: 100%;
+    min-height: 100%;
     padding: 2rem;
     padding-right: 72px; // Space for measurement icons
   }
@@ -17,7 +17,7 @@
   &__scroll-container {
     flex: 1;
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: visible;
     position: relative;
 
     // Custom scrollbar
@@ -42,7 +42,6 @@
 
   &__circuit-area {
     position: relative;
-    min-height: 100%;
   }
 
   &__lanes {

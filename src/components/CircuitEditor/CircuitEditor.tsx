@@ -19,7 +19,7 @@ const QUBIT_HEIGHT = 80;
 const MAX_POSITIONS = 20;
 const LABEL_WIDTH = 60;
 const COLUMN_GAP = 20;
-const MIN_LEFT_MARGIN = 32;
+const MIN_LEFT_MARGIN = 16;
 
 export interface CircuitEditorProps {
   /** Additional CSS class */
@@ -430,10 +430,11 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
 
   return (
     <div className={`circuit-editor ${className}`.trim()} onDragEnd={handleDragEnd}>
-      <div className="circuit-editor__canvas" ref={canvasRef}>
+      <div className="circuit-editor__canvas">
         {/* Scrollable circuit area */}
         <div className="circuit-editor__scroll-container">
           <div
+            ref={canvasRef}
             className="circuit-editor__circuit-area"
             style={{ minWidth: `${minCircuitWidth}px` }}
           >
