@@ -4,10 +4,8 @@ import './CodeEditor.scss';
 
 // Simple code icon SVG
 const CodeIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 32 32" fill="currentColor">
-    <path d="M11.854 8.854L8.707 12l3.147 3.146-1.414 1.415L5.293 12l5.147-5.146z" />
-    <path d="M20.146 8.854l3.147 3.146-3.147 3.146 1.414 1.415L26.707 12l-5.147-5.146z" />
-    <path d="M13.16 20.42l4-12 1.68.56-4 12z" />
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M4.708 5.578L2.061 8.224l2.647 2.646-.708.708L1 8.224l3.354-3.354.354.708zm6.584 0l2.647 2.646-2.647 2.646.708.708L15 8.224l-3.354-3.354-.354.708zM6 13l3-10h1l-3 10H6z" />
   </svg>
 );
 

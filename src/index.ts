@@ -39,6 +39,12 @@ export { QamposerProvider, useQamposer } from './context';
 export { useQamposer as useQamposerContext } from './hooks'; // alias
 
 // =============================================================================
+// THEME
+// =============================================================================
+export { ThemeProvider, useTheme } from './context';
+export type { Theme } from './context';
+
+// =============================================================================
 // ADAPTERS - Backend simulation connectors
 // =============================================================================
 export { qiskitAdapter, noopAdapter } from './adapters';

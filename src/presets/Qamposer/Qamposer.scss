@@ -30,6 +30,26 @@
     gap: 0.5rem;
   }
 
+  &__theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--qamposer-text-secondary, #a8a8a8);
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover {
+      background: var(--qamposer-hover, rgba(255, 255, 255, 0.1));
+      color: var(--qamposer-text-primary, #f4f4f4);
+    }
+  }
+
   &__layout {
     flex: 1;
     display: grid;
