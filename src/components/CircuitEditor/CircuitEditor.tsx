@@ -645,7 +645,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
                 : selectedGate.qubit === 0
             }
             onEdit={
-              ['RX', 'RY', 'RZ'].includes(selectedGate.type)
+              ['RX', 'RY', 'RZ', 'CNOT'].includes(selectedGate.type)
                 ? () => handleGateEdit(selectedGate)
                 : undefined
             }
@@ -705,7 +705,7 @@ function GateToolbar({
   onEdit,
   onDelete,
 }: GateToolbarProps) {
-  const isRotationGate = ['RX', 'RY', 'RZ'].includes(gate.type);
+  const isEditable = ['RX', 'RY', 'RZ', 'CNOT'].includes(gate.type);
 
   return (
     <div
@@ -718,7 +718,7 @@ function GateToolbar({
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      {isRotationGate && onEdit && (
+      {isEditable && onEdit && (
         <button
           className="circuit-editor__toolbar-btn"
           onClick={(e) => {

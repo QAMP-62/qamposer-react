@@ -170,4 +170,55 @@
     color: var(--qamposer-text-secondary, #a8a8a8);
     line-height: 1.4;
   }
+
+  &__field + &__field {
+    margin-top: 1rem;
+  }
+
+  &__select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--qamposer-border, #525252);
+    border-radius: 4px;
+    background: var(--qamposer-bg-primary, #161616);
+    color: var(--qamposer-text-primary, #f4f4f4);
+    font-size: 0.875rem;
+    font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', monospace;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s;
+
+    &:focus {
+      border-color: var(--qamposer-accent, #4285f4);
+    }
+  }
+
+  &__apply-btn {
+    width: 100%;
+    margin-top: 1.5rem;
+    padding: 0.75rem 1rem;
+    border: none;
+    border-radius: 4px;
+    background: var(--qamposer-accent, #4285f4);
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover:not(:disabled) {
+      background: var(--qamposer-accent-hover, #3367d6);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__error {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--qamposer-error, #da1e28);
+  }
 }

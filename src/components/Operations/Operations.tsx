@@ -172,8 +172,17 @@ interface GateEditorProps {
 }
 
 function GateEditor({ gate, onUpdate, onClose, className = '' }: GateEditorProps) {
+  const { circuit } = useQamposer();
+  const numQubits = circuit.qubits;
+
+  // Rotation gate state
   const [parameterValue, setParameterValue] = useState('');
 
+  // CNOT gate state
+  const [controlQubit, setControlQubit] = useState(gate.control ?? 0);
+  const [targetQubit, setTargetQubit] = useState(gate.target ?? 1);
+
+  // Initialize rotation parameter
   useEffect(() => {
     if (gate.parameter !== undefined) {
       const value = gate.parameter;
@@ -192,13 +201,24 @@ function GateEditor({ gate, onUpdate, onClose, className = '' }: GateEditorProps
     } else {
       setParameterValue('0');
     }
-  }, [gate]);
+  }, [gate.parameter]);
 
-  if (!['RX', 'RY', 'RZ'].includes(gate.type)) {
+  // Initialize CNOT qubits
+  useEffect(() => {
+    if (gate.type === 'CNOT') {
+      setControlQubit(gate.control ?? 0);
+      setTargetQubit(gate.target ?? 1);
+    }
+  }, [gate.type, gate.control, gate.target]);
+
+  const isRotationGate = ['RX', 'RY', 'RZ'].includes(gate.type);
+  const isCnotGate = gate.type === 'CNOT';
+
+  if (!isRotationGate && !isCnotGate) {
     return null;
   }
 
-  const handleSave = () => {
+  const handleRotationSave = () => {
     let radians = 0;
     try {
       const normalized = parameterValue.toLowerCase().replace(/\s/g, '');
@@ -220,10 +240,18 @@ function GateEditor({ gate, onUpdate, onClose, className = '' }: GateEditorProps
     }
   };
 
+  const handleCnotSave = () => {
+    if (controlQubit !== targetQubit) {
+      onUpdate(gate.id, { control: controlQubit, target: targetQubit });
+    }
+  };
+
+  const qubitOptions = Array.from({ length: numQubits }, (_, i) => i);
+
   return (
     <div className={`operations operations--editor ${className}`.trim()}>
       <div className="operations__header">
-        <h3>Edit {gate.type} gate</h3>
+        <h3>Edit {gate.type}</h3>
         <button
           className="operations__close-btn"
           onClick={onClose}
@@ -234,26 +262,90 @@ function GateEditor({ gate, onUpdate, onClose, className = '' }: GateEditorProps
       </div>
 
       <div className="operations__content">
-        <div className="operations__field">
-          <label htmlFor="theta-input">theta (rotation)</label>
-          <input
-            id="theta-input"
-            type="text"
-            className="operations__input"
-            value={parameterValue}
-            onChange={(e) => setParameterValue(e.target.value)}
-            onBlur={handleSave}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleSave();
-              }
-            }}
-            placeholder="e.g., pi/2, 1.5708, 2*pi"
-          />
-          <p className="operations__helper">
-            Enter angle in radians or use pi expressions (e.g., pi/2, pi, 2*pi)
-          </p>
-        </div>
+        {isRotationGate && (
+          <div className="operations__field">
+            <label htmlFor="theta-input">theta (rotation)</label>
+            <input
+              id="theta-input"
+              type="text"
+              className="operations__input"
+              value={parameterValue}
+              onChange={(e) => setParameterValue(e.target.value)}
+              onBlur={handleRotationSave}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRotationSave();
+              }}
+              placeholder="e.g., pi/2, 1.5708, 2*pi"
+            />
+            <p className="operations__helper">
+              Enter angle in radians or use pi expressions
+            </p>
+          </div>
+        )}
+
+        {isCnotGate && (
+          <>
+            <div className="operations__field">
+              <label htmlFor="control-select">Control qubit</label>
+              <select
+                id="control-select"
+                className="operations__select"
+                value={controlQubit}
+                onChange={(e) => {
+                  const newControl = parseInt(e.target.value, 10);
+                  setControlQubit(newControl);
+                  // Auto-adjust target if same as control
+                  if (newControl === targetQubit) {
+                    setTargetQubit(newControl === 0 ? 1 : 0);
+                  }
+                }}
+              >
+                {qubitOptions.map((q) => (
+                  <option key={q} value={q}>
+                    q[{q}]
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="operations__field">
+              <label htmlFor="target-select">Target qubit</label>
+              <select
+                id="target-select"
+                className="operations__select"
+                value={targetQubit}
+                onChange={(e) => {
+                  const newTarget = parseInt(e.target.value, 10);
+                  setTargetQubit(newTarget);
+                  // Auto-adjust control if same as target
+                  if (newTarget === controlQubit) {
+                    setControlQubit(newTarget === 0 ? 1 : 0);
+                  }
+                }}
+              >
+                {qubitOptions.map((q) => (
+                  <option key={q} value={q}>
+                    q[{q}]
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              className="operations__apply-btn"
+              onClick={handleCnotSave}
+              disabled={controlQubit === targetQubit}
+            >
+              Apply
+            </button>
+
+            {controlQubit === targetQubit && (
+              <p className="operations__error">
+                Control and target must be different qubits
+              </p>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
