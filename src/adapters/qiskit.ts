@@ -2,7 +2,7 @@
  * Qiskit backend simulation adapter
  */
 
-import type { SimulationAdapter, CircuitRequest, SimulationResult } from '../types';
+import type { SimulationAdapter, CircuitRequest, SimulationResult, BackendInfo } from '../types';
 import type { QiskitAdapterConfig } from './types';
 
 /**
@@ -72,6 +72,24 @@ export function qiskitAdapter(
         return response.ok;
       } catch {
         return false;
+      }
+    },
+
+    async getBackends(): Promise<BackendInfo[]> {
+      try {
+        const response = await fetch(`${baseUrl}/api/circuit/backends`, {
+          method: 'GET',
+          headers,
+        });
+
+        if (!response.ok) {
+          console.warn('Failed to fetch backends, using default');
+          return [{ id: 'ideal', name: 'Ideal Simulator', num_qubits: 32, backend_type: 'ideal' }];
+        }
+
+        return response.json();
+      } catch {
+        return [{ id: 'ideal', name: 'Ideal Simulator', num_qubits: 32, backend_type: 'ideal' }];
       }
     },
   };

@@ -141,24 +141,100 @@
     }
   }
 
-  &__backend {
+  &__loading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     padding: 1rem;
+    color: var(--qamposer-text-secondary, #a8a8a8);
+    font-size: 0.875rem;
+  }
+
+  &__backend-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+
+  &__backend-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    text-align: left;
     background: var(--qamposer-bg-primary, #161616);
     border: 1px solid var(--qamposer-border, #525252);
     border-radius: 4px;
+    cursor: pointer;
+    transition: border-color 0.15s, background-color 0.15s;
+
+    &:hover {
+      background: var(--qamposer-hover, rgba(255, 255, 255, 0.05));
+    }
+
+    &--selected {
+      border-color: var(--qamposer-accent, #4285f4);
+      background: rgba(66, 133, 244, 0.1);
+    }
+  }
+
+  &__backend-item-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__backend-item-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
   }
 
   &__backend-name {
-    margin: 0 0 0.25rem 0;
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--qamposer-text-primary, #f4f4f4);
+  }
+
+  &__backend-type {
+    padding: 0.125rem 0.375rem;
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 2px;
+
+    &--ideal {
+      background: rgba(72, 187, 120, 0.2);
+      color: #48bb78;
+    }
+
+    &--noisy_fake {
+      background: rgba(237, 137, 54, 0.2);
+      color: #ed8936;
+    }
   }
 
   &__backend-desc {
     margin: 0;
     font-size: 0.75rem;
     color: var(--qamposer-text-secondary, #a8a8a8);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__backend-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    margin-left: 0.75rem;
+    color: var(--qamposer-accent, #4285f4);
   }
 
   &__dialog-footer {

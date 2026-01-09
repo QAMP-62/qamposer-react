@@ -16,6 +16,7 @@ import type {
   SimulationCompleteEvent,
   SimulationStatus,
   SimulationAdapter,
+  SimulationProfile,
   QamposerConfig,
   QamposerContextValue,
   QasmParseResult,
@@ -260,7 +261,7 @@ export function QamposerProvider({
   // === Simulation ===
 
   const simulate = useCallback(
-    async (shots: number = 1024): Promise<SimulationResult> => {
+    async (shots: number = 1024, profile?: SimulationProfile): Promise<SimulationResult> => {
       if (!canSimulate) {
         throw new Error('Simulation adapter is not available');
       }
@@ -279,6 +280,7 @@ export function QamposerProvider({
           qubits: circuit.qubits,
           gates: circuit.gates.map(({ id: _, ...gate }) => gate),
           shots: validShots,
+          profile,
         };
 
         const simulationResult = await adapter.simulate(request);
@@ -338,6 +340,9 @@ export function QamposerProvider({
       simulate,
       canSimulate,
 
+      // Adapter
+      adapter,
+
       // Config
       config,
     }),
@@ -361,6 +366,7 @@ export function QamposerProvider({
       exportQasm,
       simulate,
       canSimulate,
+      adapter,
       config,
     ]
   );

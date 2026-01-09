@@ -41,6 +41,26 @@ export interface Circuit {
 }
 
 // ============================================================================
+// Backend Types
+// ============================================================================
+
+export type BackendType = 'ideal' | 'noisy_fake';
+
+export interface SimulationProfile {
+  type: BackendType;
+  backend_name?: string;
+  seed?: number;
+}
+
+export interface BackendInfo {
+  id: string;
+  name: string;
+  num_qubits: number;
+  backend_type: BackendType;
+  description?: string;
+}
+
+// ============================================================================
 // Simulation Types
 // ============================================================================
 
@@ -48,6 +68,7 @@ export interface CircuitRequest {
   qubits: number;
   gates: Omit<Gate, 'id'>[];
   shots: number;
+  profile?: SimulationProfile;
 }
 
 export interface QSpherePoint {
@@ -120,6 +141,8 @@ export interface SimulationAdapter {
   simulate(request: CircuitRequest): Promise<SimulationResult>;
   /** Check if adapter is available */
   isAvailable(): Promise<boolean>;
+  /** Get available backends (optional) */
+  getBackends?(): Promise<BackendInfo[]>;
 }
 
 // ============================================================================
@@ -155,8 +178,11 @@ export interface QamposerContextValue {
   setQasmCode: (code: string) => void;
 
   // Simulation
-  simulate: (shots?: number) => Promise<SimulationResult>;
+  simulate: (shots?: number, profile?: SimulationProfile) => Promise<SimulationResult>;
   canSimulate: boolean;
+
+  // Adapter
+  adapter: SimulationAdapter;
 
   // Config
   config: Required<QamposerConfig>;

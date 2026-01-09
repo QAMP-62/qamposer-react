@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQamposer } from '../../hooks/useQamposer';
+import type { BackendInfo, SimulationProfile } from '../../types';
 import './SimulationControls.scss';
 
 // Simple icons
@@ -21,6 +22,12 @@ const LoadingSpinner = () => (
   </svg>
 );
 
+const CheckIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 32 32" fill="currentColor">
+    <path d="M13 24l-9-9 1.4-1.4L13 21.2 26.6 7.6 28 9z" />
+  </svg>
+);
+
 export interface SimulationControlsProps {
   /** Render as button only (without dialog) */
   buttonOnly?: boolean;
@@ -35,10 +42,37 @@ export function SimulationControls({
   buttonLabel = 'Set up and run',
   className = '',
 }: SimulationControlsProps) {
-  const { simulate, status, circuit } = useQamposer();
+  const { simulate, status, circuit, adapter } = useQamposer();
   const isSimulating = status === 'simulating';
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [shots, setShots] = useState(1024);
+
+  // Backend selection state
+  const [backends, setBackends] = useState<BackendInfo[]>([]);
+  const [selectedBackendId, setSelectedBackendId] = useState<string>('ideal');
+  const [isLoadingBackends, setIsLoadingBackends] = useState(false);
+
+  // Load backends when dialog opens
+  useEffect(() => {
+    if (isDialogOpen && adapter.getBackends) {
+      setIsLoadingBackends(true);
+      adapter.getBackends()
+        .then(setBackends)
+        .finally(() => setIsLoadingBackends(false));
+    }
+  }, [isDialogOpen, adapter]);
+
+  const selectedBackend = backends.find(b => b.id === selectedBackendId);
+
+  const buildProfile = (): SimulationProfile | undefined => {
+    if (!selectedBackend || selectedBackend.backend_type === 'ideal') {
+      return { type: 'ideal' };
+    }
+    return {
+      type: 'noisy_fake',
+      backend_name: selectedBackend.id,
+    };
+  };
 
   const handleRun = async () => {
     if (circuit.gates.length === 0) {
@@ -46,7 +80,8 @@ export function SimulationControls({
       return;
     }
 
-    await simulate(shots);
+    const profile = buildProfile();
+    await simulate(shots, profile);
     setIsDialogOpen(false);
   };
 
@@ -114,10 +149,42 @@ export function SimulationControls({
 
               <div className="simulation-controls__section">
                 <h3>Step 2: Choose a backend</h3>
-                <div className="simulation-controls__backend">
-                  <p className="simulation-controls__backend-name">Qiskit Simulator</p>
-                  <p className="simulation-controls__backend-desc">Local statevector simulator</p>
-                </div>
+                {isLoadingBackends ? (
+                  <div className="simulation-controls__loading">
+                    <LoadingSpinner />
+                    <span>Loading backends...</span>
+                  </div>
+                ) : (
+                  <div className="simulation-controls__backend-list">
+                    {backends.map((backend) => (
+                      <button
+                        key={backend.id}
+                        type="button"
+                        className={`simulation-controls__backend-item ${
+                          selectedBackendId === backend.id ? 'simulation-controls__backend-item--selected' : ''
+                        }`}
+                        onClick={() => setSelectedBackendId(backend.id)}
+                      >
+                        <div className="simulation-controls__backend-item-content">
+                          <div className="simulation-controls__backend-item-header">
+                            <span className="simulation-controls__backend-name">{backend.name}</span>
+                            <span className={`simulation-controls__backend-type simulation-controls__backend-type--${backend.backend_type}`}>
+                              {backend.backend_type === 'ideal' ? 'Ideal' : 'Noisy'}
+                            </span>
+                          </div>
+                          <p className="simulation-controls__backend-desc">
+                            {backend.description || `${backend.num_qubits} qubits`}
+                          </p>
+                        </div>
+                        {selectedBackendId === backend.id && (
+                          <span className="simulation-controls__backend-check">
+                            <CheckIcon />
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
