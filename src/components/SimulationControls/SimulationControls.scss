@@ -150,6 +150,49 @@
     font-size: 0.875rem;
   }
 
+  &__error {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: rgba(218, 30, 40, 0.1);
+    border: 1px solid rgba(218, 30, 40, 0.3);
+    border-radius: 4px;
+  }
+
+  &__error-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    background: #da1e28;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 50%;
+  }
+
+  &__error-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__error-title {
+    margin: 0 0 0.25rem 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fa4d56;
+  }
+
+  &__error-desc {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--qamposer-text-secondary, #a8a8a8);
+    line-height: 1.4;
+  }
+
   &__backend-list {
     display: flex;
     flex-direction: column;

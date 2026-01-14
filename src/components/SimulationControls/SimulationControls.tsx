@@ -42,7 +42,7 @@ export function SimulationControls({
   buttonLabel = 'Set up and run',
   className = '',
 }: SimulationControlsProps) {
-  const { simulate, status, circuit, adapter } = useQamposer();
+  const { simulate, status, circuit, adapter, canSimulate } = useQamposer();
   const isSimulating = status === 'simulating';
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [shots, setShots] = useState(1024);
@@ -51,16 +51,24 @@ export function SimulationControls({
   const [backends, setBackends] = useState<BackendInfo[]>([]);
   const [selectedBackendId, setSelectedBackendId] = useState<string>('ideal');
   const [isLoadingBackends, setIsLoadingBackends] = useState(false);
+  const [backendError, setBackendError] = useState(false);
 
   // Load backends when dialog opens
   useEffect(() => {
     if (isDialogOpen && adapter.getBackends) {
       setIsLoadingBackends(true);
+      setBackendError(false);
       adapter.getBackends()
-        .then(setBackends)
+        .then((result) => {
+          setBackends(result);
+          // If only 1 backend (ideal fallback) and canSimulate is false, backend is unavailable
+          if (result.length === 1 && result[0].id === 'ideal' && !canSimulate) {
+            setBackendError(true);
+          }
+        })
         .finally(() => setIsLoadingBackends(false));
     }
-  }, [isDialogOpen, adapter]);
+  }, [isDialogOpen, adapter, canSimulate]);
 
   const selectedBackend = backends.find(b => b.id === selectedBackendId);
 
@@ -154,6 +162,16 @@ export function SimulationControls({
                     <LoadingSpinner />
                     <span>Loading backends...</span>
                   </div>
+                ) : backendError ? (
+                  <div className="simulation-controls__error">
+                    <span className="simulation-controls__error-icon">!</span>
+                    <div className="simulation-controls__error-content">
+                      <p className="simulation-controls__error-title">Backend unavailable</p>
+                      <p className="simulation-controls__error-desc">
+                        Cannot connect to the simulation backend. Please check that the server is running and CORS is configured correctly.
+                      </p>
+                    </div>
+                  </div>
                 ) : (
                   <div className="simulation-controls__backend-list">
                     {backends.map((backend) => (
@@ -199,7 +217,7 @@ export function SimulationControls({
               <button
                 className="simulation-controls__btn simulation-controls__btn--primary"
                 onClick={handleRun}
-                disabled={isSimulating}
+                disabled={isSimulating || backendError}
               >
                 {isSimulating ? (
                   <>
