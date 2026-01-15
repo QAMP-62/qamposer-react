@@ -38,12 +38,20 @@ export function Operations({ className = '' }: OperationsProps = {}) {
 
 // GateLibrary sub-component
 function GateLibrary({ className = '' }: { className?: string }) {
+  const { circuit } = useQamposer();
+  const canUseCnot = circuit.qubits >= 2;
+
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     single: true,
     multi: false,
   });
 
   const handleDragStart = (event: React.DragEvent, gateType: GateType) => {
+    // Prevent CNOT drag when only 1 qubit
+    if (gateType === 'CNOT' && !canUseCnot) {
+      event.preventDefault();
+      return;
+    }
     event.dataTransfer.setData('gateType', gateType);
     event.dataTransfer.setData(`application/x-gate-${gateType.toLowerCase()}`, '');
     event.dataTransfer.effectAllowed = 'copy';
@@ -58,13 +66,14 @@ function GateLibrary({ className = '' }: { className?: string }) {
 
   const renderGate = (gate: GateInfo) => {
     if (gate.type === 'CNOT') {
+      const isDisabled = !canUseCnot;
       return (
         <div
           key={gate.type}
-          className="operations__gate operations__gate--cnot"
-          draggable
+          className={`operations__gate operations__gate--cnot ${isDisabled ? 'operations__gate--disabled' : ''}`}
+          draggable={!isDisabled}
           onDragStart={(e) => handleDragStart(e, gate.type)}
-          title={gate.description}
+          title={isDisabled ? 'CNOT requires at least 2 qubits' : gate.description}
         >
           <svg
             viewBox="0 0 32 32"

@@ -105,10 +105,18 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
     return centerXs;
   }, [columnLeftXs, columnWidths]);
 
-  // Get qubits occupied by a gate
+  // Get qubits occupied by a gate.
+  // For CNOT, this includes all qubits between control and target
+  // (the vertical line spans through them).
   const getGateQubits = (gate: Gate): number[] => {
     if (gate.type === 'CNOT' && gate.control !== undefined && gate.target !== undefined) {
-      return [gate.control, gate.target];
+      const minQubit = Math.min(gate.control, gate.target);
+      const maxQubit = Math.max(gate.control, gate.target);
+      const qubits: number[] = [];
+      for (let q = minQubit; q <= maxQubit; q++) {
+        qubits.push(q);
+      }
+      return qubits;
     }
     return gate.qubit !== undefined ? [gate.qubit] : [];
   };
@@ -152,7 +160,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
         if (g.type !== 'CNOT' || g.control === undefined || g.target === undefined) {
           return false;
         }
-        const gateQubits = [g.control, g.target];
+        const gateQubits = getGateQubits(g);
         return (
           targetQubits.some((q) => gateQubits.includes(q)) && g.position > closestPos
         );
@@ -326,20 +334,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
 
   const handleQubitRemove = () => {
     if (selectedQubitIndex === null) return;
-
-    const hasGates = gates.some(
-      (g) =>
-        g.qubit === selectedQubitIndex ||
-        g.control === selectedQubitIndex ||
-        g.target === selectedQubitIndex
-    );
-
-    if (hasGates) {
-      // Clear gates if qubit has gates
-      updateGates([]);
-    }
-
-    removeQubit();
+    removeQubit(selectedQubitIndex);
     setSelectedQubitIndex(null);
   };
 
@@ -661,7 +656,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
               left: LABEL_WIDTH,
             }}
             canAdd={qubits < config.maxQubits}
-            canRemove={qubits > 2}
+            canRemove={qubits > 1}
             onAddQubit={handleQubitAdd}
             onDeleteQubit={handleQubitRemove}
           />

@@ -109,6 +109,21 @@
         overflow: hidden;
       }
     }
+
+    &--disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+
+      &:hover {
+        transform: none;
+        box-shadow: none;
+      }
+
+      &:active {
+        cursor: not-allowed;
+        transform: none;
+      }
+    }
   }
 
   &__gate-label {

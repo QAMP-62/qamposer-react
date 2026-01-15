@@ -166,7 +166,7 @@ export interface QamposerContextValue {
   updateGates: (gates: Gate[]) => void;
   setQubits: (count: number) => void;
   addQubit: () => void;
-  removeQubit: () => void;
+  removeQubit: (qubitIndex?: number) => void;
   clearCircuit: () => void;
 
   // Gate Editing

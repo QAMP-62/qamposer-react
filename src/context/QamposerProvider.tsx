@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { QamposerContext } from './QamposerContext';
-import { circuitToQasm, qasmToCircuit, generateGateId } from '../utils/openqasm';
+import { circuitToQasm, qasmToCircuit, generateGateId, compactGates } from '../utils/openqasm';
 import { noopAdapter } from '../adapters/noop';
 import type {
   Circuit,
@@ -169,10 +169,63 @@ export function QamposerProvider({
 
   const updateGate = useCallback(
     (id: string, updates: Partial<Gate>) => {
+      const targetGate = circuit.gates.find((g) => g.id === id);
+      if (!targetGate) return;
+
+      const updatedGate = { ...targetGate, ...updates };
+
+      // Helper to get qubits occupied by a gate (including all qubits between CNOT control/target)
+      const getGateQubits = (gate: Gate): number[] => {
+        if (gate.type === 'CNOT' && gate.control !== undefined && gate.target !== undefined) {
+          const minQ = Math.min(gate.control, gate.target);
+          const maxQ = Math.max(gate.control, gate.target);
+          const qubits: number[] = [];
+          for (let q = minQ; q <= maxQ; q++) {
+            qubits.push(q);
+          }
+          return qubits;
+        }
+        return gate.qubit !== undefined ? [gate.qubit] : [];
+      };
+
+      // Check if updating CNOT control/target causes conflicts
+      const isCnotUpdate = targetGate.type === 'CNOT' &&
+        (updates.control !== undefined || updates.target !== undefined);
+
+      let updatedGates: Gate[];
+
+      if (isCnotUpdate) {
+        const newQubits = getGateQubits(updatedGate);
+        const gatePosition = updatedGate.position;
+
+        // Find conflicting gates at the same position
+        updatedGates = circuit.gates.map((g) => {
+          if (g.id === id) {
+            return updatedGate;
+          }
+          // Check if this gate conflicts with the updated CNOT
+          if (g.position === gatePosition) {
+            const gateQubits = getGateQubits(g);
+            const hasConflict = gateQubits.some((q) => newQubits.includes(q));
+            if (hasConflict) {
+              // Shift conflicting gate to the right
+              return { ...g, position: g.position + 1 };
+            }
+          }
+          return g;
+        });
+
+        // Compact gates to resolve any further conflicts and left-align
+        updatedGates = compactGates(updatedGates);
+      } else {
+        updatedGates = circuit.gates.map((g) => (g.id === id ? updatedGate : g));
+      }
+
       updateCircuit({
         ...circuit,
-        gates: circuit.gates.map((g) => (g.id === id ? { ...g, ...updates } : g)),
+        gates: updatedGates,
       });
+
       // Update editing gate if it's being edited
       if (editingGate?.id === id) {
         setEditingGate({ ...editingGate, ...updates });
@@ -193,7 +246,7 @@ export function QamposerProvider({
 
   const setQubits = useCallback(
     (count: number) => {
-      const newCount = Math.min(Math.max(2, count), config.maxQubits);
+      const newCount = Math.min(Math.max(1, count), config.maxQubits);
       updateCircuit({
         ...circuit,
         qubits: newCount,
@@ -211,16 +264,60 @@ export function QamposerProvider({
     }
   }, [circuit, config.maxQubits, updateCircuit]);
 
-  const removeQubit = useCallback(() => {
-    if (circuit.qubits <= 2) {
-      return;
-    }
-    updateCircuit({
-      ...circuit,
-      qubits: circuit.qubits - 1,
-    });
-    setResult(null);
-  }, [circuit, updateCircuit]);
+  const removeQubit = useCallback(
+    (qubitIndex?: number) => {
+      if (circuit.qubits <= 1) {
+        return;
+      }
+
+      // Default to removing the last qubit if no index specified
+      const removedIndex = qubitIndex ?? circuit.qubits - 1;
+
+      // Filter out gates that act on the removed qubit and adjust indices
+      const updatedGates = circuit.gates
+        .filter((gate) => {
+          // Remove gates that act on the deleted qubit
+          if (gate.type === 'CNOT') {
+            return gate.control !== removedIndex && gate.target !== removedIndex;
+          }
+          return gate.qubit !== removedIndex;
+        })
+        .map((gate) => {
+          // Adjust qubit indices for gates on higher-indexed qubits
+          if (gate.type === 'CNOT') {
+            return {
+              ...gate,
+              control:
+                gate.control !== undefined && gate.control > removedIndex
+                  ? gate.control - 1
+                  : gate.control,
+              target:
+                gate.target !== undefined && gate.target > removedIndex
+                  ? gate.target - 1
+                  : gate.target,
+            };
+          }
+          return {
+            ...gate,
+            qubit:
+              gate.qubit !== undefined && gate.qubit > removedIndex
+                ? gate.qubit - 1
+                : gate.qubit,
+          };
+        });
+
+      // Compact gates to remove gaps after deletion
+      const compactedGates = compactGates(updatedGates);
+
+      updateCircuit({
+        ...circuit,
+        qubits: circuit.qubits - 1,
+        gates: compactedGates,
+      });
+      setResult(null);
+    },
+    [circuit, updateCircuit]
+  );
 
   const clearCircuit = useCallback(() => {
     updateCircuit({

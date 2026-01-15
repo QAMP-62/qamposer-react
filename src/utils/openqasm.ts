@@ -126,11 +126,19 @@ function formatParameter(value: number): string {
 }
 
 /**
- * Get all qubit indices a gate occupies
+ * Get all qubit indices a gate occupies.
+ * For CNOT, this includes all qubits between control and target
+ * (the vertical line spans through them).
  */
 function getGateQubits(gate: Gate): number[] {
-  if (gate.type === 'CNOT') {
-    return [gate.control!, gate.target!];
+  if (gate.type === 'CNOT' && gate.control !== undefined && gate.target !== undefined) {
+    const minQubit = Math.min(gate.control, gate.target);
+    const maxQubit = Math.max(gate.control, gate.target);
+    const qubits: number[] = [];
+    for (let q = minQubit; q <= maxQubit; q++) {
+      qubits.push(q);
+    }
+    return qubits;
   }
   return gate.qubit !== undefined ? [gate.qubit] : [];
 }
