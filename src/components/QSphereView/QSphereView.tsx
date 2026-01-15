@@ -1,67 +1,159 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import Plot from 'react-plotly.js';
 import { useQamposer } from '../../hooks/useQamposer';
+import type { QSpherePoint } from '../../types';
 import './QSphereView.scss';
 
+// Color constants
 const BG = 'rgba(12,16,22,0.96)';
 const RING = 'rgba(255,255,255,0.35)';
 const SPOKE = 'rgba(80,140,255,0.55)';
-const AXIS_COLOR = 'rgba(255,255,255,0.7)';
-const GRID_COLOR = 'rgba(255,255,255,0.12)';
-const ZERO_COLOR = 'rgba(255,255,255,0.35)';
 
-const DEFAULT_CAMERA = {
+// Camera configuration
+interface CameraPosition {
+  eye: { x: number; y: number; z: number };
+  center: { x: number; y: number; z: number };
+  up: { x: number; y: number; z: number };
+}
+
+const DEFAULT_CAMERA: CameraPosition = {
   eye: { x: 1.35, y: 1.35, z: 1.05 },
   center: { x: 0, y: 0, z: 0 },
   up: { x: 0, y: 0, z: 1 },
 };
 
+// Sphere generation parameters
+const RESOLUTION_THETA = 48;
+const RESOLUTION_PHI = 96;
+
 export interface QSphereViewProps {
-  /** Additional CSS class */
   className?: string;
 }
 
-export function QSphereView({ className = '' }: QSphereViewProps = {}) {
+// Format phase as fraction of pi
+function formatPhaseFraction(phase: number): string {
+  const pi = Math.PI;
+  const normalized = ((phase % (2 * pi)) + 2 * pi) % (2 * pi);
+  const frac = normalized / pi;
+  const snapped = Math.round(frac * 4) / 4;
+
+  if (snapped === 0) return '0';
+  if (snapped === 2) return '2π';
+
+  const numerator = snapped * 4;
+  const gcd = (a: number, b: number): number => (b === 0 ? Math.abs(a) : gcd(b, a % b));
+  const g = gcd(Math.abs(numerator), 4);
+  const n = numerator / g;
+  const d = 4 / g;
+
+  return d === 1 ? `${n}π` : `${n}π/${d}`;
+}
+
+// Build circle points for rings
+function buildCircle(
+  theta: number,
+  isMeridian: boolean = false
+): { x: number[]; y: number[]; z: number[] } {
+  const x: number[] = [];
+  const y: number[] = [];
+  const z: number[] = [];
+
+  for (let j = 0; j <= RESOLUTION_PHI; j++) {
+    const phi = (2 * Math.PI * j) / RESOLUTION_PHI;
+    if (isMeridian) {
+      x.push(Math.sin(phi) * Math.sin(theta));
+      y.push(Math.cos(phi) * Math.sin(theta));
+      z.push(Math.cos(theta));
+    } else {
+      x.push(Math.sin(theta) * Math.cos(phi));
+      y.push(Math.sin(theta) * Math.sin(phi));
+      z.push(Math.cos(theta));
+    }
+  }
+
+  return { x, y, z };
+}
+
+// Generate unit sphere surface data
+function generateSphereSurface(): {
+  x: number[][];
+  y: number[][];
+  z: number[][];
+  surfacecolor: number[][];
+} {
+  const x: number[][] = [];
+  const y: number[][] = [];
+  const z: number[][] = [];
+  const surfacecolor: number[][] = [];
+
+  for (let i = 0; i <= RESOLUTION_THETA; i++) {
+    const theta = (Math.PI * i) / RESOLUTION_THETA;
+    const rowX: number[] = [];
+    const rowY: number[] = [];
+    const rowZ: number[] = [];
+    const rowC: number[] = [];
+
+    for (let j = 0; j <= RESOLUTION_PHI; j++) {
+      const phi = (2 * Math.PI * j) / RESOLUTION_PHI;
+      rowX.push(Math.sin(theta) * Math.cos(phi));
+      rowY.push(Math.sin(theta) * Math.sin(phi));
+      rowZ.push(Math.cos(theta));
+      rowC.push(1 - Math.abs(Math.cos(theta)) * 0.35);
+    }
+
+    x.push(rowX);
+    y.push(rowY);
+    z.push(rowZ);
+    surfacecolor.push(rowC);
+  }
+
+  return { x, y, z, surfacecolor };
+}
+
+// Generate radial lines from center to each point
+function generateRadialLines(points: QSpherePoint[]): {
+  x: (number | null)[];
+  y: (number | null)[];
+  z: (number | null)[];
+} {
+  const x: (number | null)[] = [];
+  const y: (number | null)[] = [];
+  const z: (number | null)[] = [];
+
+  points.forEach((p) => {
+    x.push(0, p.x, null);
+    y.push(0, p.y, null);
+    z.push(0, p.z, null);
+  });
+
+  return { x, y, z };
+}
+
+export function QSphereView({ className = '' }: QSphereViewProps) {
   const { result } = useQamposer();
   const points = result?.qsphere;
 
   const [showStateLabels, setShowStateLabels] = useState(true);
   const [showPhaseLabels, setShowPhaseLabels] = useState(false);
-  const [camera, setCamera] = useState(DEFAULT_CAMERA);
-  const plotRef = useRef<any>(null);
+  const [camera, setCamera] = useState<CameraPosition>(DEFAULT_CAMERA);
+  const plotRef = useRef<Plot>(null);
 
   useEffect(() => {
     const handleResize = () => {
-      if (plotRef.current?.resizeHandler) {
-        plotRef.current.resizeHandler();
+      const plotElement = plotRef.current as unknown as { resizeHandler?: () => void };
+      if (plotElement?.resizeHandler) {
+        plotElement.resizeHandler();
       }
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const formatPhaseFraction = (phase: number) => {
-    const pi = Math.PI;
-    const normalized = ((phase % (2 * pi)) + 2 * pi) % (2 * pi);
-    const frac = normalized / pi;
-    const snapped = Math.round(frac * 4) / 4;
-    if (snapped === 0) return '0';
-    if (snapped === 2) return '2π';
-    const numerator = snapped * 4;
-    const denom = 4;
-    const gcd = (a: number, b: number): number => (b === 0 ? Math.abs(a) : gcd(b, a % b));
-    const g = gcd(Math.abs(numerator), denom);
-    const n = numerator / g;
-    const d = denom / g;
-    if (d === 1) return `${n}π`;
-    return `${n}π/${d}`;
-  };
-
-  // All useMemo hooks must be called before any early returns
+  // Generate label text for each point
   const labelText = useMemo(
     () =>
       (points || []).map((p) => {
-        const parts = [];
+        const parts: string[] = [];
         if (showStateLabels) parts.push(`|${p.state}⟩`);
         if (showPhaseLabels) parts.push(`φ=${formatPhaseFraction(p.phase)}`);
         return parts.join('<br>');
@@ -79,172 +171,151 @@ export function QSphereView({ className = '' }: QSphereViewProps = {}) {
     );
   }
 
+  // Extract point data
   const x = points.map((p) => p.x);
   const y = points.map((p) => p.y);
   const z = points.map((p) => p.z);
-  const sizes = points.map((p) => 10 + 38 * Math.sqrt(p.probability));
+  const sizes = points.map((p) => 6 + 18 * Math.sqrt(p.probability));
   const phases = points.map((p) => p.phase);
 
-  const hoverText = points.map((p) => {
-    const phaseFraction = formatPhaseFraction(p.phase);
-    return (
+  // Generate hover text
+  const hoverText = points.map(
+    (p) =>
       `<b>State |${p.state}⟩</b>` +
       `<br>Probability: ${p.probability.toFixed(3)}` +
-      `<br>Phase angle: ${phaseFraction}`
-    );
-  });
+      `<br>Phase angle: ${formatPhaseFraction(p.phase)}`
+  );
 
-  // Unit sphere surface
-  const resolutionTheta = 48;
-  const resolutionPhi = 96;
-  const sphereX: number[][] = [];
-  const sphereY: number[][] = [];
-  const sphereZ: number[][] = [];
-  const sphereC: number[][] = [];
+  // Generate sphere surface
+  const sphereData = generateSphereSurface();
 
-  for (let i = 0; i <= resolutionTheta; i++) {
-    const theta = (Math.PI * i) / resolutionTheta;
-    const rowX: number[] = [];
-    const rowY: number[] = [];
-    const rowZ: number[] = [];
-    const rowC: number[] = [];
-    for (let j = 0; j <= resolutionPhi; j++) {
-      const phi = (2 * Math.PI * j) / resolutionPhi;
-      rowX.push(Math.sin(theta) * Math.cos(phi));
-      rowY.push(Math.sin(theta) * Math.sin(phi));
-      rowZ.push(Math.cos(theta));
-      rowC.push(1 - Math.abs(Math.cos(theta)) * 0.35);
-    }
-    sphereX.push(rowX);
-    sphereY.push(rowY);
-    sphereZ.push(rowZ);
-    sphereC.push(rowC);
-  }
+  // Generate ring data
+  const equatorRing = buildCircle(Math.PI / 2);
+  const meridianRing = buildCircle(0, true);
 
-  const surfaceTrace: any = {
-    type: 'surface',
-    x: sphereX,
-    y: sphereY,
-    z: sphereZ,
-    surfacecolor: sphereC,
-    showscale: false,
-    opacity: 0.32,
-    hoverinfo: 'skip',
-    colorscale: [
-      [0, 'rgba(44,78,120,0.45)'],
-      [1, 'rgba(18,28,44,0.55)'],
-    ],
-    contours: { x: { show: false }, y: { show: false }, z: { show: false } },
-    lighting: { ambient: 0.9, diffuse: 0.45, specular: 0.1 },
-    showlegend: false,
+  // Generate radial lines
+  const radialData = generateRadialLines(points);
+
+  // Axis style - hide all axis elements for clean Q-sphere look
+  const hiddenAxisStyle = {
+    range: [-1.1, 1.1],
+    showgrid: false,
+    showline: false,
+    zeroline: false,
+    showticklabels: false,
+    showspikes: false,
+    title: { text: '' },
+    showbackground: false,
   };
 
-  // Ring traces
-  const buildCircle = (theta: number, isMeridian = false) => {
-    const ringX: number[] = [];
-    const ringY: number[] = [];
-    const ringZ: number[] = [];
-    for (let j = 0; j <= resolutionPhi; j++) {
-      const phi = (2 * Math.PI * j) / resolutionPhi;
-      if (isMeridian) {
-        ringX.push(Math.sin(phi) * Math.sin(theta));
-        ringY.push(Math.cos(phi) * Math.sin(theta));
-        ringZ.push(Math.cos(theta));
-      } else {
-        ringX.push(Math.sin(theta) * Math.cos(phi));
-        ringY.push(Math.sin(theta) * Math.sin(phi));
-        ringZ.push(Math.cos(theta));
-      }
-    }
-    return { ringX, ringY, ringZ };
-  };
+  // Plotly traces (using type assertion due to incomplete Plotly type definitions)
+  const traces = [
+    // Sphere surface
+    {
+      type: 'surface' as const,
+      x: sphereData.x,
+      y: sphereData.y,
+      z: sphereData.z,
+      surfacecolor: sphereData.surfacecolor,
+      showscale: false,
+      opacity: 0.32,
+      hoverinfo: 'skip' as const,
+      colorscale: [
+        [0, 'rgba(44,78,120,0.45)'],
+        [1, 'rgba(18,28,44,0.55)'],
+      ],
+      contours: { x: { show: false }, y: { show: false }, z: { show: false } },
+      lighting: { ambient: 0.9, diffuse: 0.45, specular: 0.1 },
+      showlegend: false,
+    },
 
-  const ringTraces: any[] = [];
-  const { ringX: eqX, ringY: eqY, ringZ: eqZ } = buildCircle(Math.PI / 2);
-  ringTraces.push({
-    type: 'scatter3d',
-    mode: 'lines',
-    hoverinfo: 'skip',
-    x: eqX,
-    y: eqY,
-    z: eqZ,
-    line: { color: RING, width: 2 },
-    showlegend: false,
-  });
+    // Radial lines
+    {
+      type: 'scatter3d' as const,
+      mode: 'lines' as const,
+      hoverinfo: 'skip' as const,
+      x: radialData.x,
+      y: radialData.y,
+      z: radialData.z,
+      line: { color: SPOKE, width: 2 },
+      showlegend: false,
+    },
 
-  const { ringX: merX, ringY: merY, ringZ: merZ } = buildCircle(0, true);
-  ringTraces.push({
-    type: 'scatter3d',
-    mode: 'lines',
-    hoverinfo: 'skip',
-    x: merX,
-    y: merY,
-    z: merZ,
-    line: { color: RING, width: 1.5, dash: 'dot' },
-    showlegend: false,
-  });
+    // Equator ring
+    {
+      type: 'scatter3d' as const,
+      mode: 'lines' as const,
+      hoverinfo: 'skip' as const,
+      x: equatorRing.x,
+      y: equatorRing.y,
+      z: equatorRing.z,
+      line: { color: RING, width: 2 },
+      showlegend: false,
+    },
 
-  // Radial lines
-  const radialX: (number | null)[] = [];
-  const radialY: (number | null)[] = [];
-  const radialZ: (number | null)[] = [];
-  points.forEach((p) => {
-    radialX.push(0, p.x, null);
-    radialY.push(0, p.y, null);
-    radialZ.push(0, p.z, null);
-  });
+    // Meridian ring
+    {
+      type: 'scatter3d' as const,
+      mode: 'lines' as const,
+      hoverinfo: 'skip' as const,
+      x: meridianRing.x,
+      y: meridianRing.y,
+      z: meridianRing.z,
+      line: { color: RING, width: 1.5, dash: 'dot' },
+      showlegend: false,
+    },
 
-  const radialTrace: any = {
-    type: 'scatter3d',
-    mode: 'lines',
-    hoverinfo: 'skip',
-    x: radialX,
-    y: radialY,
-    z: radialZ,
-    line: { color: SPOKE, width: 2 },
-    showlegend: false,
-  };
+    // State points
+    {
+      type: 'scatter3d' as const,
+      mode: 'markers+text',
+      x,
+      y,
+      z,
+      text: labelText,
+      hoverinfo: 'text' as const,
+      hovertext: hoverText,
+      textposition: 'top center',
+      textfont: { color: '#ffffff', size: 12 },
+      marker: {
+        size: sizes,
+        color: phases,
+        colorscale: 'HSV',
+        cmin: -Math.PI,
+        cmax: Math.PI,
+        opacity: 0.95,
+        line: { color: '#cfd8ff', width: 1.5 },
+      },
+      showlegend: false,
+    },
+  ];
 
-  const pointTrace: any = {
-    type: 'scatter3d',
-    mode: 'markers+text',
-    x,
-    y,
-    z,
-    text: labelText,
-    hoverinfo: 'text',
-    hovertext: hoverText,
-    textposition: 'top center',
-    textfont: { color: '#ffffff', size: 12 },
-    texttemplate: '%{text}',
-    marker: {
-      size: sizes,
-      color: phases,
-      colorscale: 'HSV',
-      cmin: -Math.PI,
-      cmax: Math.PI,
-      opacity: 0.95,
-      line: { color: '#cfd8ff', width: 1.5 },
+  const layout = {
+    uirevision: 'qsphere-view',
+    scene: {
+      xaxis: hiddenAxisStyle,
+      yaxis: hiddenAxisStyle,
+      zaxis: hiddenAxisStyle,
+      aspectmode: 'cube' as const,
+      bgcolor: BG,
+      camera,
+    },
+    margin: { l: 0, r: 0, t: 10, b: 0 },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: {
+      family: 'IBM Plex Sans, sans-serif',
+      size: 12,
+      color: 'rgba(255,255,255,0.85)',
     },
     showlegend: false,
   };
 
-  const axisStyle = {
-    range: [-1.1, 1.1],
-    title: { text: '' },
-    backgroundcolor: 'rgba(0,0,0,0)',
-    showgrid: true,
-    gridcolor: GRID_COLOR,
-    gridwidth: 1,
-    zeroline: true,
-    zerolinecolor: ZERO_COLOR,
-    zerolinewidth: 2,
-    showline: true,
-    linecolor: AXIS_COLOR,
-    linewidth: 2,
-    tickfont: { color: AXIS_COLOR, size: 10 },
-    tickcolor: AXIS_COLOR,
-    ticklen: 4,
+  const config = {
+    displayModeBar: false,
+    scrollZoom: true,
+    responsive: true,
+    displaylogo: false,
   };
 
   return (
@@ -278,33 +349,9 @@ export function QSphereView({ className = '' }: QSphereViewProps = {}) {
       <div className="qsphere-view__plot">
         <Plot
           ref={plotRef}
-          data={[surfaceTrace, radialTrace, ...ringTraces, pointTrace]}
-          layout={{
-            uirevision: 'qsphere-view',
-            scene: {
-              xaxis: axisStyle,
-              yaxis: axisStyle,
-              zaxis: axisStyle,
-              aspectmode: 'cube',
-              bgcolor: BG,
-              camera,
-            },
-            margin: { l: 0, r: 0, t: 10, b: 0 },
-            paper_bgcolor: 'rgba(0,0,0,0)',
-            plot_bgcolor: 'rgba(0,0,0,0)',
-            font: {
-              family: 'IBM Plex Sans, sans-serif',
-              size: 12,
-              color: 'rgba(255,255,255,0.85)',
-            },
-            showlegend: false,
-          }}
-          config={{
-            displayModeBar: false,
-            scrollZoom: true,
-            responsive: true,
-            displaylogo: false,
-          }}
+          data={traces as Plotly.Data[]}
+          layout={layout}
+          config={config}
           useResizeHandler
           style={{ width: '100%', height: '100%' }}
         />
