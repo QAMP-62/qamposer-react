@@ -3,52 +3,63 @@
  *
  * A modular React component library for building quantum circuit editors
  * with simulation capabilities.
+ *
+ * This is the core module with NO plotly dependency.
+ * For QSphere visualization, import from '@qamposer/react/visualization'.
+ *
+ * @example
+ * ```typescript
+ * // Core components (no plotly required)
+ * import { QamposerMicro, CircuitEditor, Operations } from '@qamposer/react';
+ *
+ * // Full preset with QSphere (requires plotly)
+ * import { Qamposer, QSphereView } from '@qamposer/react/visualization';
+ * ```
  */
 
 // =============================================================================
-// MAIN COMPONENT
+// PRESETS - Ready-to-use component compositions (core only)
 // =============================================================================
-export { Qamposer } from './presets';
-export type { QamposerProps } from './presets';
+
+// Micro preset - minimal (Operations, CircuitEditor only) - NO plotly
+export { QamposerMicro } from './presets/QamposerMicro';
+export type { QamposerMicroProps } from './presets/QamposerMicro';
+
+// Note: Full Qamposer preset (with QSphere) is in '@qamposer/react/visualization'
 
 // =============================================================================
-// CORE COMPONENTS - Individual building blocks
+// CORE COMPONENTS - Individual building blocks (no plotly)
 // =============================================================================
-export {
-  CircuitEditor,
-  Operations,
-  ResultsPanel,
-  QSphereView,
-  CodeEditor,
-  SimulationControls,
-} from './components';
+export { CircuitEditor } from './components/CircuitEditor';
+export { Operations } from './components/Operations';
+export { CodeEditor } from './components/CodeEditor';
+export { SimulationControls } from './components/SimulationControls';
 
-export type {
-  CircuitEditorProps,
-  OperationsProps,
-  ResultsPanelProps,
-  QSphereViewProps,
-  CodeEditorProps,
-  SimulationControlsProps,
-} from './components';
+// Note: QSphereView and ResultsPanel are in '@qamposer/react/visualization' (require plotly)
+
+export type { CircuitEditorProps } from './components/CircuitEditor';
+export type { OperationsProps } from './components/Operations';
+export type { CodeEditorProps } from './components/CodeEditor';
+export type { SimulationControlsProps } from './components/SimulationControls';
 
 // =============================================================================
 // CONTEXT & HOOKS
 // =============================================================================
-export { QamposerProvider, useQamposer } from './context';
-export { useQamposer as useQamposerContext } from './hooks'; // alias
+export { QamposerProvider } from './context/QamposerProvider';
+export { useQamposer } from './hooks/useQamposer';
 
 // =============================================================================
 // THEME
 // =============================================================================
-export { ThemeProvider, useTheme } from './context';
-export type { Theme } from './context';
+export { ThemeProvider, useTheme } from './context/ThemeContext';
+export type { Theme } from './context/ThemeContext';
 
 // =============================================================================
 // ADAPTERS - Backend simulation connectors
 // =============================================================================
-export { qiskitAdapter, noopAdapter } from './adapters';
-export type { QiskitAdapterConfig } from './adapters';
+export { qiskitAdapter } from './adapters/qiskit';
+export { noopAdapter } from './adapters/noop';
+export type { QiskitAdapterConfig } from './adapters/types';
 
 // =============================================================================
 // TYPES - Core type definitions
@@ -76,4 +87,9 @@ export type {
 // =============================================================================
 // UTILITIES - Helper functions
 // =============================================================================
-export { circuitToQasm, qasmToCircuit, createDefaultCircuit, generateGateId } from './utils';
+export {
+  circuitToQasm,
+  qasmToCircuit,
+  createDefaultCircuit,
+  generateGateId,
+} from './utils/openqasm';

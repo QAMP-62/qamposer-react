@@ -79,6 +79,8 @@ export function QamposerProvider({
         onCircuitChange?.(newCircuit);
       } else {
         setInternalCircuit(newCircuit);
+        // Also call onCircuitChange in uncontrolled mode for external listeners
+        onCircuitChange?.(newCircuit);
       }
     },
     [isControlled, onCircuitChange]

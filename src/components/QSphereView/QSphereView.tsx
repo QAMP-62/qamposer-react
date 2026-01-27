@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import Plot from 'react-plotly.js';
 import { useQamposer } from '../../hooks/useQamposer';
 import type { QSpherePoint } from '../../types';
@@ -136,18 +136,6 @@ export function QSphereView({ className = '' }: QSphereViewProps) {
   const [showStateLabels, setShowStateLabels] = useState(true);
   const [showPhaseLabels, setShowPhaseLabels] = useState(false);
   const [camera, setCamera] = useState<CameraPosition>(DEFAULT_CAMERA);
-  const plotRef = useRef<Plot>(null);
-
-  useEffect(() => {
-    const handleResize = () => {
-      const plotElement = plotRef.current as unknown as { resizeHandler?: () => void };
-      if (plotElement?.resizeHandler) {
-        plotElement.resizeHandler();
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   // Generate label text for each point
   const labelText = useMemo(
@@ -348,7 +336,6 @@ export function QSphereView({ className = '' }: QSphereViewProps) {
       </div>
       <div className="qsphere-view__plot">
         <Plot
-          ref={plotRef}
           data={traces as Plotly.Data[]}
           layout={layout}
           config={config}

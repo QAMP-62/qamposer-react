@@ -17,6 +17,16 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./visualization": {
+      "import": {
+        "types": "./dist/visualization.d.ts",
+        "default": "./dist/visualization.js"
+      },
+      "require": {
+        "types": "./dist/visualization.d.cts",
+        "default": "./dist/visualization.cjs"
+      }
+    },
     "./styles.css": "./dist/styles.css"
   },
   "files": [
@@ -36,11 +46,17 @@
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0"
-  },
-  "dependencies": {
-    "plotly.js-basic-dist-min": "^2.35.0",
+    "react-dom": "^18.0.0 || ^19.0.0",
+    "plotly.js-basic-dist-min": "^2.35.0 || ^3.0.0",
     "react-plotly.js": "^2.6.0"
+  },
+  "peerDependenciesMeta": {
+    "plotly.js-basic-dist-min": {
+      "optional": true
+    },
+    "react-plotly.js": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
