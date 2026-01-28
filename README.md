@@ -2,7 +2,7 @@
   Qamposer
 </h1>
 
-> Qamposer is a modular, open-source quantum composer that can be embedded into your applications and runs anywhere.
+Qamposer is a modular, open-source quantum composer that can be embedded into your applications and runs anywhere.
 
 ## Installation
 
