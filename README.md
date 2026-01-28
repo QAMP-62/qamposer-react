@@ -4,22 +4,6 @@
 
 > Qamposer is a modular, open-source quantum composer that can be embedded into your applications and runs anywhere.
 
-## Examples
-
-### Educational Platform
-
-**Suitable for quantum education in schools and companies.**
-An interactive quantum computing tutorial with step-by-step guidance.
-
-![Education Example](./docs/gif/education.gif)
-
-### Gaming Application
-
-**Quantum Circuit as a Controller**
-Quantum mechanics and simulation results can be directly leveraged as game logic.
-
-![Gaming Example](./docs/gif/gaming.gif)
-
 ## Installation
 
 > **Coming Soon** - npm package publication is in progress.
@@ -30,6 +14,24 @@ npm install @qamposer/react
 ```
 
 For now, please use the source code directly or contact the maintainers for access.
+
+## Examples
+
+### Educational Platform
+
+**Suitable for quantum education in schools and companies.**
+
+An interactive quantum computing tutorial with step-by-step guidance.
+
+![Education Example](./docs/gif/education.gif)
+
+### Gaming Application
+
+**Quantum Circuit as a Controller.**
+
+Quantum mechanics and simulation results can be directly leveraged as game logic.
+
+![Gaming Example](./docs/gif/gaming.gif)
 
 ## Quick Start
 
