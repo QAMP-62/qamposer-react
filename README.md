@@ -310,4 +310,4 @@ For `Qamposer` (full version) with visualization:
 
 ## License
 
-MIT
+Licensed under the Apache 2.0.
