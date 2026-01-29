@@ -19,9 +19,7 @@ describe('QamposerMicro', () => {
   });
 
   it('hides header when showHeader is false', () => {
-    const { container } = render(
-      <QamposerMicro adapter={noopAdapter} showHeader={false} />
-    );
+    const { container } = render(<QamposerMicro adapter={noopAdapter} showHeader={false} />);
 
     expect(container.querySelector('.qamposer-micro__header')).not.toBeInTheDocument();
   });
@@ -41,18 +39,14 @@ describe('QamposerMicro', () => {
   });
 
   it('hides theme toggle when showThemeToggle is false', () => {
-    const { container } = render(
-      <QamposerMicro adapter={noopAdapter} showThemeToggle={false} />
-    );
+    const { container } = render(<QamposerMicro adapter={noopAdapter} showThemeToggle={false} />);
 
     expect(container.querySelector('.qamposer-micro__theme-toggle')).not.toBeInTheDocument();
   });
 
   it('accepts a default circuit', () => {
     const circuit = { qubits: 3, gates: [] };
-    const { container } = render(
-      <QamposerMicro adapter={noopAdapter} defaultCircuit={circuit} />
-    );
+    const { container } = render(<QamposerMicro adapter={noopAdapter} defaultCircuit={circuit} />);
 
     expect(container.querySelector('.qamposer-micro')).toBeInTheDocument();
   });
@@ -62,11 +56,7 @@ describe('QamposerMicro', () => {
     const circuit = { qubits: 2, gates: [] };
 
     const { container } = render(
-      <QamposerMicro
-        adapter={noopAdapter}
-        circuit={circuit}
-        onCircuitChange={onCircuitChange}
-      />
+      <QamposerMicro adapter={noopAdapter} circuit={circuit} onCircuitChange={onCircuitChange} />
     );
 
     expect(container.querySelector('.qamposer-micro')).toBeInTheDocument();

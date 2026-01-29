@@ -18,7 +18,15 @@ const CloseIcon = () => (
 
 const LoadingSpinner = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" className="simulation-controls__spinner">
-    <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="25 75" />
+    <circle
+      cx="8"
+      cy="8"
+      r="6"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeDasharray="25 75"
+    />
   </svg>
 );
 
@@ -58,7 +66,8 @@ export function SimulationControls({
     if (isDialogOpen && adapter.getBackends) {
       setIsLoadingBackends(true);
       setBackendError(false);
-      adapter.getBackends()
+      adapter
+        .getBackends()
         .then((result) => {
           setBackends(result);
           // If only 1 backend (ideal fallback) and canSimulate is false, backend is unavailable
@@ -70,7 +79,7 @@ export function SimulationControls({
     }
   }, [isDialogOpen, adapter, canSimulate]);
 
-  const selectedBackend = backends.find(b => b.id === selectedBackendId);
+  const selectedBackend = backends.find((b) => b.id === selectedBackendId);
 
   const buildProfile = (): SimulationProfile | undefined => {
     if (!selectedBackend || selectedBackend.backend_type === 'ideal') {
@@ -168,7 +177,8 @@ export function SimulationControls({
                     <div className="simulation-controls__error-content">
                       <p className="simulation-controls__error-title">Backend unavailable</p>
                       <p className="simulation-controls__error-desc">
-                        Cannot connect to the simulation backend. Please check that the server is running and CORS is configured correctly.
+                        Cannot connect to the simulation backend. Please check that the server is
+                        running and CORS is configured correctly.
                       </p>
                     </div>
                   </div>
@@ -179,14 +189,20 @@ export function SimulationControls({
                         key={backend.id}
                         type="button"
                         className={`simulation-controls__backend-item ${
-                          selectedBackendId === backend.id ? 'simulation-controls__backend-item--selected' : ''
+                          selectedBackendId === backend.id
+                            ? 'simulation-controls__backend-item--selected'
+                            : ''
                         }`}
                         onClick={() => setSelectedBackendId(backend.id)}
                       >
                         <div className="simulation-controls__backend-item-content">
                           <div className="simulation-controls__backend-item-header">
-                            <span className="simulation-controls__backend-name">{backend.name}</span>
-                            <span className={`simulation-controls__backend-type simulation-controls__backend-type--${backend.backend_type}`}>
+                            <span className="simulation-controls__backend-name">
+                              {backend.name}
+                            </span>
+                            <span
+                              className={`simulation-controls__backend-type simulation-controls__backend-type--${backend.backend_type}`}
+                            >
                               {backend.backend_type === 'ideal' ? 'Ideal' : 'Noisy'}
                             </span>
                           </div>

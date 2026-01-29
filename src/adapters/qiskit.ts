@@ -21,9 +21,7 @@ import type { QiskitAdapterConfig } from './types';
  * });
  * ```
  */
-export function qiskitAdapter(
-  configOrUrl: string | QiskitAdapterConfig
-): SimulationAdapter {
+export function qiskitAdapter(configOrUrl: string | QiskitAdapterConfig): SimulationAdapter {
   const config: QiskitAdapterConfig =
     typeof configOrUrl === 'string' ? { baseUrl: configOrUrl } : configOrUrl;
 

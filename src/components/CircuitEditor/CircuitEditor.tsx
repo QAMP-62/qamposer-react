@@ -27,14 +27,7 @@ export interface CircuitEditorProps {
 }
 
 export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
-  const {
-    circuit,
-    updateGates,
-    addQubit,
-    removeQubit,
-    setEditingGate,
-    config,
-  } = useQamposer();
+  const { circuit, updateGates, addQubit, removeQubit, setEditingGate, config } = useQamposer();
 
   const { qubits, gates } = circuit;
 
@@ -161,9 +154,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
           return false;
         }
         const gateQubits = getGateQubits(g);
-        return (
-          targetQubits.some((q) => gateQubits.includes(q)) && g.position > closestPos
-        );
+        return targetQubits.some((q) => gateQubits.includes(q)) && g.position > closestPos;
       })
       .sort((a, b) => a.position - b.position)[0];
 
@@ -217,13 +208,9 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
 
     let gateType: GateType | null = draggingGateType;
     if (!gateType) {
-      const mimeType = event.dataTransfer.types.find((t) =>
-        t.startsWith('application/x-gate-')
-      );
+      const mimeType = event.dataTransfer.types.find((t) => t.startsWith('application/x-gate-'));
       if (mimeType) {
-        gateType = mimeType
-          .replace('application/x-gate-', '')
-          .toUpperCase() as GateType;
+        gateType = mimeType.replace('application/x-gate-', '').toUpperCase() as GateType;
         setDraggingGateType(gateType);
       }
     }
@@ -233,11 +220,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
     if (canvasRef.current && gateType) {
       const rect = canvasRef.current.getBoundingClientRect();
       const mouseX = event.clientX - rect.left;
-      const { finalPosition, shiftedGates } = calculateDropPosition(
-        mouseX,
-        qubit,
-        gateType
-      );
+      const { finalPosition, shiftedGates } = calculateDropPosition(mouseX, qubit, gateType);
       setDragOverPosition(finalPosition);
       setPreviewShiftedGates(shiftedGates);
     }
@@ -273,11 +256,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
 
     const rect = canvasRef.current.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
-    const { initialPosition, control, target } = calculateDropPosition(
-      mouseX,
-      qubit,
-      gateType
-    );
+    const { initialPosition, control, target } = calculateDropPosition(mouseX, qubit, gateType);
 
     const targetQubits =
       gateType === 'CNOT' && control !== undefined && target !== undefined
@@ -341,22 +320,15 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
   const renderGate = (gate: Gate) => {
     const isSelected = selectedGateId === gate.id;
 
-    if (
-      gate.type === 'CNOT' &&
-      gate.control !== undefined &&
-      gate.target !== undefined
-    ) {
-      const top =
-        Math.min(gate.control, gate.target) * QUBIT_HEIGHT + QUBIT_HEIGHT / 2;
+    if (gate.type === 'CNOT' && gate.control !== undefined && gate.target !== undefined) {
+      const top = Math.min(gate.control, gate.target) * QUBIT_HEIGHT + QUBIT_HEIGHT / 2;
       const height = Math.abs(gate.target - gate.control) * QUBIT_HEIGHT;
       const left = columnCenterXs[gate.position];
 
       return (
         <div
           key={gate.id}
-          className={`circuit-editor__cnot ${
-            isSelected ? 'circuit-editor__cnot--selected' : ''
-          }`}
+          className={`circuit-editor__cnot ${isSelected ? 'circuit-editor__cnot--selected' : ''}`}
           style={{
             left: `${left}px`,
             top: `${top}px`,
@@ -385,9 +357,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
 
     const isRotationGate = ['RX', 'RY', 'RZ'].includes(gate.type);
     const parameterLabel =
-      gate.parameter !== undefined
-        ? `(${(gate.parameter / Math.PI).toFixed(2)}π)`
-        : '';
+      gate.parameter !== undefined ? `(${(gate.parameter / Math.PI).toFixed(2)}π)` : '';
 
     const centerX = columnCenterXs[gate.position];
 
@@ -414,13 +384,12 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
     );
   };
 
-  const selectedGate = selectedGateId
-    ? gates.find((g) => g.id === selectedGateId)
-    : null;
+  const selectedGate = selectedGateId ? gates.find((g) => g.id === selectedGateId) : null;
 
   // Calculate the required width for all gates
-  const maxGatePosition = gates.length > 0 ? Math.max(...gates.map(g => g.position)) : 0;
-  const lastColumnRightEdge = columnLeftXs[maxGatePosition] + columnWidths[maxGatePosition] + COLUMN_GAP;
+  const maxGatePosition = gates.length > 0 ? Math.max(...gates.map((g) => g.position)) : 0;
+  const lastColumnRightEdge =
+    columnLeftXs[maxGatePosition] + columnWidths[maxGatePosition] + COLUMN_GAP;
   const minCircuitWidth = Math.max(lastColumnRightEdge, 400); // Minimum width
 
   return (
@@ -465,202 +434,182 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
               </div>
             </div>
 
-        {/* Gates */}
-        <div className="circuit-editor__gates">
-          {gates
-            .filter((gate) => {
-              const isBeingShifted = previewShiftedGates.some(
-                (sg) => sg.id === gate.id
-              );
-              return !isBeingShifted;
-            })
-            .map(renderGate)}
-        </div>
-
-        {/* New gate drop preview */}
-        {dragOverQubit !== null &&
-          dragOverPosition !== null &&
-          draggingGateType && (
-            <div className="circuit-editor__preview">
-              {draggingGateType === 'CNOT' ? (
-                (() => {
-                  const control = Math.min(dragOverQubit, qubits - 2);
-                  const target = control + 1;
-                  const top = control * QUBIT_HEIGHT + QUBIT_HEIGHT / 2;
-                  const height = QUBIT_HEIGHT;
-                  return (
-                    <div
-                      className="circuit-editor__cnot circuit-editor__cnot--preview"
-                      style={{
-                        left: `${columnCenterXs[dragOverPosition]}px`,
-                        top: `${top}px`,
-                        height: `${height}px`,
-                      }}
-                    >
-                      <div className="circuit-editor__cnot-line" />
-                      <div
-                        className="circuit-editor__cnot-control"
-                        style={{ top: control < target ? '0' : '100%' }}
-                      />
-                      <div
-                        className="circuit-editor__cnot-target"
-                        style={{ top: target < control ? '0' : '100%' }}
-                      />
-                    </div>
-                  );
-                })()
-              ) : (
-                <div
-                  className="circuit-editor__gate circuit-editor__gate--preview"
-                  style={{
-                    left: `${columnCenterXs[dragOverPosition]}px`,
-                    top: `${dragOverQubit * QUBIT_HEIGHT + QUBIT_HEIGHT / 2}px`,
-                  }}
-                >
-                  <span className="circuit-editor__gate-label">
-                    {draggingGateType}
-                    {['RX', 'RY', 'RZ'].includes(draggingGateType) && (
-                      <span className="circuit-editor__gate-param">(0.50π)</span>
-                    )}
-                  </span>
-                </div>
-              )}
+            {/* Gates */}
+            <div className="circuit-editor__gates">
+              {gates
+                .filter((gate) => {
+                  const isBeingShifted = previewShiftedGates.some((sg) => sg.id === gate.id);
+                  return !isBeingShifted;
+                })
+                .map(renderGate)}
             </div>
-          )}
 
-        {/* Shifted gates preview */}
-        {previewShiftedGates.length > 0 && (
-          <div className="circuit-editor__preview circuit-editor__preview--shifted">
-            {previewShiftedGates.map((shiftedGate) => {
-              const originalGate = gates.find((g) => g.id === shiftedGate.id);
-              if (!originalGate) return null;
-
-              if (
-                originalGate.type === 'CNOT' &&
-                originalGate.control !== undefined &&
-                originalGate.target !== undefined
-              ) {
-                const top =
-                  Math.min(originalGate.control, originalGate.target) *
-                    QUBIT_HEIGHT +
-                  QUBIT_HEIGHT / 2;
-                const height =
-                  Math.abs(originalGate.target - originalGate.control) *
-                  QUBIT_HEIGHT;
-                return (
+            {/* New gate drop preview */}
+            {dragOverQubit !== null && dragOverPosition !== null && draggingGateType && (
+              <div className="circuit-editor__preview">
+                {draggingGateType === 'CNOT' ? (
+                  (() => {
+                    const control = Math.min(dragOverQubit, qubits - 2);
+                    const target = control + 1;
+                    const top = control * QUBIT_HEIGHT + QUBIT_HEIGHT / 2;
+                    const height = QUBIT_HEIGHT;
+                    return (
+                      <div
+                        className="circuit-editor__cnot circuit-editor__cnot--preview"
+                        style={{
+                          left: `${columnCenterXs[dragOverPosition]}px`,
+                          top: `${top}px`,
+                          height: `${height}px`,
+                        }}
+                      >
+                        <div className="circuit-editor__cnot-line" />
+                        <div
+                          className="circuit-editor__cnot-control"
+                          style={{ top: control < target ? '0' : '100%' }}
+                        />
+                        <div
+                          className="circuit-editor__cnot-target"
+                          style={{ top: target < control ? '0' : '100%' }}
+                        />
+                      </div>
+                    );
+                  })()
+                ) : (
                   <div
-                    key={shiftedGate.id}
-                    className="circuit-editor__cnot circuit-editor__cnot--shifted-preview"
+                    className="circuit-editor__gate circuit-editor__gate--preview"
                     style={{
-                      left: `${columnCenterXs[shiftedGate.newPosition]}px`,
-                      top: `${top}px`,
-                      height: `${height}px`,
+                      left: `${columnCenterXs[dragOverPosition]}px`,
+                      top: `${dragOverQubit * QUBIT_HEIGHT + QUBIT_HEIGHT / 2}px`,
                     }}
                   >
-                    <div className="circuit-editor__cnot-line" />
-                    <div
-                      className="circuit-editor__cnot-control"
-                      style={{
-                        top:
-                          originalGate.control < originalGate.target
-                            ? '0'
-                            : '100%',
-                      }}
-                    />
-                    <div
-                      className="circuit-editor__cnot-target"
-                      style={{
-                        top:
-                          originalGate.target < originalGate.control
-                            ? '0'
-                            : '100%',
-                      }}
-                    />
+                    <span className="circuit-editor__gate-label">
+                      {draggingGateType}
+                      {['RX', 'RY', 'RZ'].includes(draggingGateType) && (
+                        <span className="circuit-editor__gate-param">(0.50π)</span>
+                      )}
+                    </span>
                   </div>
-                );
-              }
+                )}
+              </div>
+            )}
 
-              if (originalGate.qubit === undefined) return null;
+            {/* Shifted gates preview */}
+            {previewShiftedGates.length > 0 && (
+              <div className="circuit-editor__preview circuit-editor__preview--shifted">
+                {previewShiftedGates.map((shiftedGate) => {
+                  const originalGate = gates.find((g) => g.id === shiftedGate.id);
+                  if (!originalGate) return null;
 
-              const isRotationGate = ['RX', 'RY', 'RZ'].includes(
-                originalGate.type
-              );
-              const parameterLabel =
-                originalGate.parameter !== undefined
-                  ? `(${(originalGate.parameter / Math.PI).toFixed(2)}π)`
-                  : '';
+                  if (
+                    originalGate.type === 'CNOT' &&
+                    originalGate.control !== undefined &&
+                    originalGate.target !== undefined
+                  ) {
+                    const top =
+                      Math.min(originalGate.control, originalGate.target) * QUBIT_HEIGHT +
+                      QUBIT_HEIGHT / 2;
+                    const height =
+                      Math.abs(originalGate.target - originalGate.control) * QUBIT_HEIGHT;
+                    return (
+                      <div
+                        key={shiftedGate.id}
+                        className="circuit-editor__cnot circuit-editor__cnot--shifted-preview"
+                        style={{
+                          left: `${columnCenterXs[shiftedGate.newPosition]}px`,
+                          top: `${top}px`,
+                          height: `${height}px`,
+                        }}
+                      >
+                        <div className="circuit-editor__cnot-line" />
+                        <div
+                          className="circuit-editor__cnot-control"
+                          style={{
+                            top: originalGate.control < originalGate.target ? '0' : '100%',
+                          }}
+                        />
+                        <div
+                          className="circuit-editor__cnot-target"
+                          style={{
+                            top: originalGate.target < originalGate.control ? '0' : '100%',
+                          }}
+                        />
+                      </div>
+                    );
+                  }
 
-              return (
-                <div
-                  key={shiftedGate.id}
-                  className={`circuit-editor__gate circuit-editor__gate--shifted-preview ${
-                    isRotationGate ? 'circuit-editor__gate--rotation' : ''
-                  }`}
-                  style={{
-                    left: `${columnCenterXs[shiftedGate.newPosition]}px`,
-                    top: `${originalGate.qubit * QUBIT_HEIGHT + QUBIT_HEIGHT / 2}px`,
-                    backgroundColor: GATE_COLORS[originalGate.type],
-                  }}
-                >
-                  <span className="circuit-editor__gate-label">
-                    {originalGate.type}
-                    {isRotationGate && originalGate.parameter !== undefined && (
-                      <span className="circuit-editor__gate-param">
-                        {parameterLabel}
+                  if (originalGate.qubit === undefined) return null;
+
+                  const isRotationGate = ['RX', 'RY', 'RZ'].includes(originalGate.type);
+                  const parameterLabel =
+                    originalGate.parameter !== undefined
+                      ? `(${(originalGate.parameter / Math.PI).toFixed(2)}π)`
+                      : '';
+
+                  return (
+                    <div
+                      key={shiftedGate.id}
+                      className={`circuit-editor__gate circuit-editor__gate--shifted-preview ${
+                        isRotationGate ? 'circuit-editor__gate--rotation' : ''
+                      }`}
+                      style={{
+                        left: `${columnCenterXs[shiftedGate.newPosition]}px`,
+                        top: `${originalGate.qubit * QUBIT_HEIGHT + QUBIT_HEIGHT / 2}px`,
+                        backgroundColor: GATE_COLORS[originalGate.type],
+                      }}
+                    >
+                      <span className="circuit-editor__gate-label">
+                        {originalGate.type}
+                        {isRotationGate && originalGate.parameter !== undefined && (
+                          <span className="circuit-editor__gate-param">{parameterLabel}</span>
+                        )}
                       </span>
-                    )}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
-        {/* Gate Toolbar */}
-        {selectedGate && (
-          <GateToolbar
-            gate={selectedGate}
-            position={{
-              top:
-                selectedGate.type === 'CNOT' &&
-                selectedGate.control !== undefined &&
-                selectedGate.target !== undefined
-                  ? Math.min(selectedGate.control, selectedGate.target) *
-                      QUBIT_HEIGHT +
-                    QUBIT_HEIGHT / 2
-                  : (selectedGate.qubit ?? 0) * QUBIT_HEIGHT + QUBIT_HEIGHT / 2,
-              left: columnCenterXs[selectedGate.position],
-            }}
-            showBelow={
-              selectedGate.type === 'CNOT'
-                ? Math.min(
-                    selectedGate.control ?? 0,
-                    selectedGate.target ?? 0
-                  ) === 0
-                : selectedGate.qubit === 0
-            }
-            onEdit={
-              ['RX', 'RY', 'RZ', 'CNOT'].includes(selectedGate.type)
-                ? () => handleGateEdit(selectedGate)
-                : undefined
-            }
-            onDelete={() => handleGateDelete(selectedGate.id)}
-          />
-        )}
+            {/* Gate Toolbar */}
+            {selectedGate && (
+              <GateToolbar
+                gate={selectedGate}
+                position={{
+                  top:
+                    selectedGate.type === 'CNOT' &&
+                    selectedGate.control !== undefined &&
+                    selectedGate.target !== undefined
+                      ? Math.min(selectedGate.control, selectedGate.target) * QUBIT_HEIGHT +
+                        QUBIT_HEIGHT / 2
+                      : (selectedGate.qubit ?? 0) * QUBIT_HEIGHT + QUBIT_HEIGHT / 2,
+                  left: columnCenterXs[selectedGate.position],
+                }}
+                showBelow={
+                  selectedGate.type === 'CNOT'
+                    ? Math.min(selectedGate.control ?? 0, selectedGate.target ?? 0) === 0
+                    : selectedGate.qubit === 0
+                }
+                onEdit={
+                  ['RX', 'RY', 'RZ', 'CNOT'].includes(selectedGate.type)
+                    ? () => handleGateEdit(selectedGate)
+                    : undefined
+                }
+                onDelete={() => handleGateDelete(selectedGate.id)}
+              />
+            )}
 
-        {/* Qubit Toolbar */}
-        {selectedQubitIndex !== null && (
-          <QubitToolbar
-            position={{
-              top: selectedQubitIndex * QUBIT_HEIGHT + QUBIT_HEIGHT / 2,
-              left: LABEL_WIDTH,
-            }}
-            canAdd={qubits < config.maxQubits}
-            canRemove={qubits > 1}
-            onAddQubit={handleQubitAdd}
-            onDeleteQubit={handleQubitRemove}
-          />
-        )}
+            {/* Qubit Toolbar */}
+            {selectedQubitIndex !== null && (
+              <QubitToolbar
+                position={{
+                  top: selectedQubitIndex * QUBIT_HEIGHT + QUBIT_HEIGHT / 2,
+                  left: LABEL_WIDTH,
+                }}
+                canAdd={qubits < config.maxQubits}
+                canRemove={qubits > 1}
+                onAddQubit={handleQubitAdd}
+                onDeleteQubit={handleQubitRemove}
+              />
+            )}
           </div>
         </div>
 
@@ -693,20 +642,12 @@ interface GateToolbarProps {
   onDelete: () => void;
 }
 
-function GateToolbar({
-  gate,
-  position,
-  showBelow = false,
-  onEdit,
-  onDelete,
-}: GateToolbarProps) {
+function GateToolbar({ gate, position, showBelow = false, onEdit, onDelete }: GateToolbarProps) {
   const isEditable = ['RX', 'RY', 'RZ', 'CNOT'].includes(gate.type);
 
   return (
     <div
-      className={`circuit-editor__toolbar ${
-        showBelow ? 'circuit-editor__toolbar--below' : ''
-      }`}
+      className={`circuit-editor__toolbar ${showBelow ? 'circuit-editor__toolbar--below' : ''}`}
       style={{
         top: `${position.top}px`,
         left: `${position.left}px`,

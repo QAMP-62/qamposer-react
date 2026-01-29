@@ -1,11 +1,4 @@
-import {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useMemo,
-  type ReactNode,
-} from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
 import { QamposerContext } from './QamposerContext';
 import { circuitToQasm, qasmToCircuit, generateGateId, compactGates } from '../utils/openqasm';
 import { noopAdapter } from '../adapters/noop';
@@ -58,10 +51,7 @@ export function QamposerProvider({
   config: userConfig,
   children,
 }: QamposerProviderProps) {
-  const config = useMemo(
-    () => ({ ...DEFAULT_CONFIG, ...userConfig }),
-    [userConfig]
-  );
+  const config = useMemo(() => ({ ...DEFAULT_CONFIG, ...userConfig }), [userConfig]);
 
   // Determine if we're in controlled mode
   const isControlled = controlledCircuit !== undefined;
@@ -191,7 +181,8 @@ export function QamposerProvider({
       };
 
       // Check if updating CNOT control/target causes conflicts
-      const isCnotUpdate = targetGate.type === 'CNOT' &&
+      const isCnotUpdate =
+        targetGate.type === 'CNOT' &&
         (updates.control !== undefined || updates.target !== undefined);
 
       let updatedGates: Gate[];
@@ -302,9 +293,7 @@ export function QamposerProvider({
           return {
             ...gate,
             qubit:
-              gate.qubit !== undefined && gate.qubit > removedIndex
-                ? gate.qubit - 1
-                : gate.qubit,
+              gate.qubit !== undefined && gate.qubit > removedIndex ? gate.qubit - 1 : gate.qubit,
           };
         });
 
@@ -470,9 +459,5 @@ export function QamposerProvider({
     ]
   );
 
-  return (
-    <QamposerContext.Provider value={contextValue}>
-      {children}
-    </QamposerContext.Provider>
-  );
+  return <QamposerContext.Provider value={contextValue}>{children}</QamposerContext.Provider>;
 }

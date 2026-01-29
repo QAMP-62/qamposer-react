@@ -39,9 +39,7 @@ describe('circuitToQasm', () => {
   it('converts CNOT gate', () => {
     const circuit: Circuit = {
       qubits: 2,
-      gates: [
-        { id: '1', type: 'CNOT', control: 0, target: 1, position: 0 },
-      ],
+      gates: [{ id: '1', type: 'CNOT', control: 0, target: 1, position: 0 }],
     };
     const qasm = circuitToQasm(circuit);
 
@@ -67,9 +65,7 @@ describe('circuitToQasm', () => {
   it('converts rotation gates with arbitrary values', () => {
     const circuit: Circuit = {
       qubits: 1,
-      gates: [
-        { id: '1', type: 'RX', qubit: 0, parameter: 1.23, position: 0 },
-      ],
+      gates: [{ id: '1', type: 'RX', qubit: 0, parameter: 1.23, position: 0 }],
     };
     const qasm = circuitToQasm(circuit);
 

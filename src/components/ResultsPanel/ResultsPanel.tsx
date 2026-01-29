@@ -23,9 +23,7 @@ export function ResultsPanel({ className = '' }: ResultsPanelProps = {}) {
   }
 
   // Determine number of qubits from the result
-  const maxBinaryLength = Math.max(
-    ...Object.keys(result.counts).map((s) => s.length)
-  );
+  const maxBinaryLength = Math.max(...Object.keys(result.counts).map((s) => s.length));
   const numQubits = maxBinaryLength;
 
   // Generate all possible binary states
@@ -36,10 +34,7 @@ export function ResultsPanel({ className = '' }: ResultsPanelProps = {}) {
 
   // Map counts to all possible states
   const counts = allStates.map((state) => result.counts[state] || 0);
-  const totalShots = Object.values(result.counts).reduce(
-    (sum, count) => sum + count,
-    0
-  );
+  const totalShots = Object.values(result.counts).reduce((sum, count) => sum + count, 0);
   const probabilities = counts.map((count) => (count / totalShots) * 100);
 
   const chartHeight = 400;

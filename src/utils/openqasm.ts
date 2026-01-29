@@ -172,11 +172,7 @@ export function compactGates(gatesToCompact: Gate[]): Gate[] {
 /**
  * Validate gate qubit indices against the number of qubits
  */
-function validateGateQubits(
-  gate: Gate,
-  qubits: number,
-  lineNum: number
-): string | null {
+function validateGateQubits(gate: Gate, qubits: number, lineNum: number): string | null {
   const gateQubits = getGateQubits(gate);
 
   for (const qubitIndex of gateQubits) {
@@ -286,9 +282,7 @@ function parseGateInstruction(
   }
 
   // Rotation gate with parameter: rx(pi/2) q[0]
-  const rotMatch = instruction.match(
-    /^(rx|ry|rz)\s*\(\s*([^)]+)\s*\)\s*q\[(\d+)\]$/
-  );
+  const rotMatch = instruction.match(/^(rx|ry|rz)\s*\(\s*([^)]+)\s*\)\s*q\[(\d+)\]$/);
   if (rotMatch) {
     const gateType = QASM_TO_GATE[rotMatch[1]];
     const paramValue = parseParameter(rotMatch[2]);
@@ -336,10 +330,7 @@ function parseParameter(str: string): number | null {
     [/^-?pi$/, (m) => (m[0].startsWith('-') ? -Math.PI : Math.PI)],
     [/^pi\/(\d+)$/, (m) => Math.PI / parseInt(m[1], 10)],
     [/^-pi\/(\d+)$/, (m) => -Math.PI / parseInt(m[1], 10)],
-    [
-      /^(-?\d+)\*?pi\/(\d+)$/,
-      (m) => (parseInt(m[1], 10) * Math.PI) / parseInt(m[2], 10),
-    ],
+    [/^(-?\d+)\*?pi\/(\d+)$/, (m) => (parseInt(m[1], 10) * Math.PI) / parseInt(m[2], 10)],
   ];
 
   for (const [pattern, calc] of piPatterns) {

@@ -11,7 +11,13 @@ const GATE_DEFINITIONS: GateInfo[] = [
   { type: 'RX', label: 'RX', description: 'Rotate X', category: 'rotation', color: '#9f1853' },
   { type: 'RY', label: 'RY', description: 'Rotate Y', category: 'rotation', color: '#9f1853' },
   { type: 'RZ', label: 'RZ', description: 'Rotate Z', category: 'rotation', color: '#33b1ff' },
-  { type: 'CNOT', label: 'CNOT', description: 'Controlled-NOT', category: 'multi', color: '#002d9c' },
+  {
+    type: 'CNOT',
+    label: 'CNOT',
+    description: 'Controlled-NOT',
+    category: 'multi',
+    color: '#002d9c',
+  },
 ];
 
 export interface OperationsProps {
@@ -75,22 +81,10 @@ function GateLibrary({ className = '' }: { className?: string }) {
           onDragStart={(e) => handleDragStart(e, gate.type)}
           title={isDisabled ? 'CNOT requires at least 2 qubits' : gate.description}
         >
-          <svg
-            viewBox="0 0 32 32"
-            xmlns="http://www.w3.org/2000/svg"
-            width="32"
-            height="32"
-          >
+          <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
             <rect x="0" y="0" width="32" height="32" fill="#002d9c" rx="4" />
             <circle cx="16" cy="8" r="2" fill="white" />
-            <circle
-              cx="16"
-              cy="20.667"
-              r="5.333"
-              stroke="white"
-              fill="none"
-              strokeWidth="1.25"
-            />
+            <circle cx="16" cy="20.667" r="5.333" stroke="white" fill="none" strokeWidth="1.25" />
             <line
               x1="10.667"
               x2="21.333"
@@ -99,14 +93,7 @@ function GateLibrary({ className = '' }: { className?: string }) {
               stroke="white"
               strokeWidth="1.25"
             />
-            <line
-              x1="16"
-              x2="16"
-              y1="6"
-              y2="26"
-              stroke="white"
-              strokeWidth="1.25"
-            />
+            <line x1="16" x2="16" y1="6" y2="26" stroke="white" strokeWidth="1.25" />
           </svg>
         </div>
       );
@@ -139,32 +126,22 @@ function GateLibrary({ className = '' }: { className?: string }) {
 
       <div className="operations__sections">
         <div className="operations__section">
-          <button
-            className="operations__section-header"
-            onClick={() => toggleSection('single')}
-          >
+          <button className="operations__section-header" onClick={() => toggleSection('single')}>
             <ChevronIcon expanded={expandedSections.single} />
             <span>Single-Qubit Gates</span>
           </button>
           {expandedSections.single && (
-            <div className="operations__grid">
-              {singleQubitGates.map(renderGate)}
-            </div>
+            <div className="operations__grid">{singleQubitGates.map(renderGate)}</div>
           )}
         </div>
 
         <div className="operations__section">
-          <button
-            className="operations__section-header"
-            onClick={() => toggleSection('multi')}
-          >
+          <button className="operations__section-header" onClick={() => toggleSection('multi')}>
             <ChevronIcon expanded={expandedSections.multi} />
             <span>Multi-Qubit Gates</span>
           </button>
           {expandedSections.multi && (
-            <div className="operations__grid">
-              {multiQubitGates.map(renderGate)}
-            </div>
+            <div className="operations__grid">{multiQubitGates.map(renderGate)}</div>
           )}
         </div>
       </div>
@@ -198,9 +175,7 @@ function GateEditor({ gate, onUpdate, onClose, className = '' }: GateEditorProps
       const piRatio = value / Math.PI;
 
       if (Math.abs(piRatio - Math.round(piRatio)) < 0.0001) {
-        setParameterValue(
-          piRatio === 0 ? '0' : piRatio === 1 ? 'pi' : `${Math.round(piRatio)}*pi`
-        );
+        setParameterValue(piRatio === 0 ? '0' : piRatio === 1 ? 'pi' : `${Math.round(piRatio)}*pi`);
       } else if (Math.abs(piRatio * 2 - Math.round(piRatio * 2)) < 0.0001) {
         const ratio = Math.round(piRatio * 2);
         setParameterValue(ratio === 1 ? 'pi/2' : `${ratio}*pi/2`);
@@ -261,11 +236,7 @@ function GateEditor({ gate, onUpdate, onClose, className = '' }: GateEditorProps
     <div className={`operations operations--editor ${className}`.trim()}>
       <div className="operations__header">
         <h3>Edit {gate.type}</h3>
-        <button
-          className="operations__close-btn"
-          onClick={onClose}
-          title="Close"
-        >
+        <button className="operations__close-btn" onClick={onClose} title="Close">
           <CloseIcon />
         </button>
       </div>
@@ -286,9 +257,7 @@ function GateEditor({ gate, onUpdate, onClose, className = '' }: GateEditorProps
               }}
               placeholder="e.g., pi/2, 1.5708, 2*pi"
             />
-            <p className="operations__helper">
-              Enter angle in radians or use pi expressions
-            </p>
+            <p className="operations__helper">Enter angle in radians or use pi expressions</p>
           </div>
         )}
 
@@ -349,9 +318,7 @@ function GateEditor({ gate, onUpdate, onClose, className = '' }: GateEditorProps
             </button>
 
             {controlQubit === targetQubit && (
-              <p className="operations__error">
-                Control and target must be different qubits
-              </p>
+              <p className="operations__error">Control and target must be different qubits</p>
             )}
           </>
         )}
