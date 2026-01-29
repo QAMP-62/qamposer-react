@@ -39,16 +39,16 @@ Quantum mechanics and simulation results can be directly leveraged as game logic
 ### Basic Usage (QamposerMicro)
 
 ```tsx
-import { QamposerMicro, qiskitAdapter } from "@qamposer/react";
-import "@qamposer/react/styles.css";
+import { QamposerMicro, qiskitAdapter } from '@qamposer/react';
+import '@qamposer/react/styles.css';
 
 function App() {
   return (
     <QamposerMicro
-      adapter={qiskitAdapter("http://localhost:8000")}
+      adapter={qiskitAdapter('http://localhost:8000')}
       onSimulationComplete={(event) => {
-        console.log("Result:", event.result);
-        console.log("QASM:", event.qasm);
+        console.log('Result:', event.result);
+        console.log('QASM:', event.qasm);
       }}
     />
   );
@@ -58,13 +58,13 @@ function App() {
 ### Full Version with Visualization (Qamposer)
 
 ```tsx
-import { Qamposer } from "@qamposer/react/visualization";
-import "@qamposer/react/styles.css";
+import { Qamposer } from '@qamposer/react/visualization';
+import '@qamposer/react/styles.css';
 
 function App() {
   return (
     <Qamposer
-      adapter={qiskitAdapter("http://localhost:8000")}
+      adapter={qiskitAdapter('http://localhost:8000')}
       defaultTheme="dark"
       showThemeToggle
     />
@@ -106,7 +106,7 @@ This library provides two preset components to fit different use cases:
 
 The React components handle circuit editing and visualization, but actual quantum simulation requires a backend server running Qiskit.
 
-### Starting the Backend
+### Starting the Backend ([qamposer-backend](https://github.com/QAMP-62/qamposer-backend))
 
 ```bash
 # Clone and setup qamposer-backend
@@ -122,7 +122,7 @@ The backend will start at `http://localhost:8000` by default.
 If you only need the circuit editor without simulation capabilities, use the `noopAdapter`:
 
 ```tsx
-import { QamposerMicro, noopAdapter } from "@qamposer/react";
+import { QamposerMicro, noopAdapter } from '@qamposer/react';
 
 // No backend required - simulation is disabled
 <QamposerMicro adapter={noopAdapter} />;
@@ -150,7 +150,7 @@ interface QamposerProps {
   className?: string;
   showHeader?: boolean; // Default: true
   title?: string; // Default: 'Qamposer'
-  defaultTheme?: "light" | "dark"; // Default: 'dark'
+  defaultTheme?: 'light' | 'dark'; // Default: 'dark'
   showThemeToggle?: boolean; // Default: true
 
   // Layout (Qamposer only)
@@ -174,19 +174,19 @@ interface QamposerConfig {
 
 ```tsx
 // Qiskit Backend Adapter
-import { qiskitAdapter } from "@qamposer/react";
+import { qiskitAdapter } from '@qamposer/react';
 
-const adapter = qiskitAdapter("http://localhost:8000");
+const adapter = qiskitAdapter('http://localhost:8000');
 
 // With options
 const adapter = qiskitAdapter({
-  baseUrl: "http://localhost:8000",
-  headers: { Authorization: "Bearer token" },
+  baseUrl: 'http://localhost:8000',
+  headers: { Authorization: 'Bearer token' },
   timeout: 30000,
 });
 
 // No-op Adapter (editor only, no simulation)
-import { noopAdapter } from "@qamposer/react";
+import { noopAdapter } from '@qamposer/react';
 ```
 
 ### useQamposer Hook
@@ -241,7 +241,7 @@ import { QSphereView, ResultsPanel } from '@qamposer/react/visualization';
 ## OpenQASM Utilities
 
 ```tsx
-import { circuitToQasm, qasmToCircuit } from "@qamposer/react";
+import { circuitToQasm, qasmToCircuit } from '@qamposer/react';
 
 // Convert Circuit to OpenQASM
 const qasm = circuitToQasm(circuit);
@@ -285,7 +285,7 @@ The library uses CSS variables for theming. You can customize colors by overridi
 Or use the theme hook:
 
 ```tsx
-import { useTheme } from "@qamposer/react";
+import { useTheme } from '@qamposer/react';
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
