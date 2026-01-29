@@ -40,14 +40,16 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint src",
     "link:yalc": "pnpm build && yalc publish",
     "push:yalc": "pnpm build && yalc push"
   },
   "peerDependencies": {
+    "plotly.js-basic-dist-min": "^2.35.0 || ^3.0.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0",
-    "plotly.js-basic-dist-min": "^2.35.0 || ^3.0.0",
     "react-plotly.js": "^2.6.0"
   },
   "peerDependenciesMeta": {
@@ -59,15 +61,24 @@
     }
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/react-plotly.js": "^2.6.3",
     "esbuild-sass-plugin": "^3.3.1",
+    "eslint": "^9.39.2",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "happy-dom": "^20.4.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sass": "^1.97.1",
     "tsup": "^8.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.54.0",
+    "vitest": "^4.0.18"
   },
   "keywords": [
     "quantum",
@@ -77,7 +88,7 @@
     "editor",
     "qasm"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/QAMP-62/qamposer-react"

@@ -334,13 +334,12 @@ function parseParameter(str: string): number | null {
   // Handle pi expressions
   const piPatterns: [RegExp, (m: RegExpMatchArray) => number][] = [
     [/^-?pi$/, (m) => (m[0].startsWith('-') ? -Math.PI : Math.PI)],
-    [
-      /^(-?\d*)\*?pi\/(\d+)$/,
-      (m) =>
-        ((parseInt(m[1] || '1', 10) || 1) * Math.PI) / parseInt(m[2], 10),
-    ],
     [/^pi\/(\d+)$/, (m) => Math.PI / parseInt(m[1], 10)],
     [/^-pi\/(\d+)$/, (m) => -Math.PI / parseInt(m[1], 10)],
+    [
+      /^(-?\d+)\*?pi\/(\d+)$/,
+      (m) => (parseInt(m[1], 10) * Math.PI) / parseInt(m[2], 10),
+    ],
   ];
 
   for (const [pattern, calc] of piPatterns) {
