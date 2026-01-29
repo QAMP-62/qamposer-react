@@ -1,6 +1,6 @@
 {
   "name": "@qamposer/react",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "React components for quantum circuit composition",
   "type": "module",
   "main": "./dist/index.cjs",
