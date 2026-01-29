@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       plotly.js-basic-dist-min:
-        specifier: ^2.35.0
+        specifier: ^2.35.0 || ^3.0.0
         version: 2.35.3
       react-plotly.js:
         specifier: ^2.6.0
