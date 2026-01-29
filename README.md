@@ -6,14 +6,15 @@ Qamposer is a modular, open-source quantum composer that can be embedded into yo
 
 ## Installation
 
-> **Coming Soon** - npm package publication is in progress.
-
 ```bash
-# Not yet available
 npm install @qamposer/react
 ```
 
-For now, please use the source code directly or contact the maintainers for access.
+For the full version with visualization (Q-sphere, histograms), also install Plotly:
+
+```bash
+npm install plotly.js-basic-dist-min react-plotly.js
+```
 
 ## Examples
 
@@ -309,6 +310,11 @@ For `Qamposer` (full version) with visualization:
   "react-plotly.js": "^2.6.0"
 }
 ```
+
+## Support & Stability
+
+- This library is under active development.
+- Please report issues via [GitHub Issues](https://github.com/QAMP-62/qamposer-react/issues).
 
 ## License
 
