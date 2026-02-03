@@ -39,32 +39,27 @@ Quantum mechanics and simulation results can be directly leveraged as game logic
 ### Basic Usage (QamposerMicro)
 
 ```tsx
-import { QamposerMicro, qiskitAdapter } from '@qamposer/react';
-import '@qamposer/react/styles.css';
+import { QamposerMicro } from '@qamposer/react';
 
 function App() {
-  return (
-    <QamposerMicro
-      adapter={qiskitAdapter('http://localhost:8000')}
-      onSimulationComplete={(event) => {
-        console.log('Result:', event.result);
-        console.log('QASM:', event.qasm);
-      }}
-    />
-  );
+  return <QamposerMicro />;
 }
 ```
 
+> **Note**: By default, QamposerMicro runs in editor-only mode (no simulation). To enable simulation, see [With Backend](#with-backend-simulation) below.
+
 ### Full Version with Visualization (Qamposer)
+
+The full version includes visualization components (histograms, Q-sphere) that require simulation results, so a backend adapter is needed:
 
 ```tsx
 import { Qamposer } from '@qamposer/react/visualization';
-import '@qamposer/react/styles.css';
+import { qiskitAdapter } from '@qamposer/react';
 
 function App() {
   return (
     <Qamposer
-      adapter={qiskitAdapter('http://localhost:8000')}
+      adapter={qiskitAdapter('http://localhost:8080')}
       defaultTheme="dark"
       showThemeToggle
     />
@@ -102,11 +97,24 @@ This library provides two preset components to fit different use cases:
 
 ## Backend Requirements
 
-> **Important**: To run quantum simulations, you need to run the `qamposer-backend` server.
+The React components work standalone for circuit editing. To run quantum simulations, you need the `qamposer-backend` server.
 
-The React components handle circuit editing and visualization, but actual quantum simulation requires a backend server running Qiskit.
+### Editor-Only Mode
 
-### Starting the Backend ([qamposer-backend](https://github.com/QAMP-62/qamposer-backend))
+By default, components run in editor-only mode without requiring a backend:
+
+```tsx
+import { QamposerMicro } from '@qamposer/react';
+
+// No backend required - editor-only mode (default)
+<QamposerMicro />;
+```
+
+### With Backend (Simulation)
+
+To enable quantum simulation, start the backend and pass the `qiskitAdapter`:
+
+Assuming localhost is used here, but please specify the actual deployment destination for the backend.
 
 ```bash
 # Clone and setup qamposer-backend
@@ -115,17 +123,16 @@ poetry install
 poetry run uvicorn backend.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
-The backend will start at `http://localhost:8000` by default.
-
-### Editor-Only Mode (No Backend)
-
-If you only need the circuit editor without simulation capabilities, use the `noopAdapter`:
-
 ```tsx
-import { QamposerMicro, noopAdapter } from '@qamposer/react';
+import { QamposerMicro, qiskitAdapter } from '@qamposer/react';
 
-// No backend required - simulation is disabled
-<QamposerMicro adapter={noopAdapter} />;
+<QamposerMicro
+  adapter={qiskitAdapter('http://localhost:8080')}
+  onSimulationComplete={(event) => {
+    console.log('Result:', event.result);
+    console.log('QASM:', event.qasm);
+  }}
+/>;
 ```
 
 ## API Reference
@@ -140,7 +147,7 @@ interface QamposerProps {
   onCircuitChange?: (circuit: Circuit) => void;
 
   // Simulation
-  adapter?: SimulationAdapter; // Backend adapter
+  adapter?: SimulationAdapter; // Backend adapter (default: noopAdapter)
   onSimulationComplete?: (event: SimulationCompleteEvent) => void;
 
   // Configuration
@@ -170,7 +177,7 @@ interface QamposerConfig {
 }
 ```
 
-### Adapters
+<!-- ### Adapters
 
 ```tsx
 // Qiskit Backend Adapter
@@ -187,14 +194,14 @@ const adapter = qiskitAdapter({
 
 // No-op Adapter (editor only, no simulation)
 import { noopAdapter } from '@qamposer/react';
-```
+``` -->
 
-### useQamposer Hook
+<!-- ### useQamposer Hook
 
 For building custom UIs, use the `useQamposer` hook within a `QamposerProvider`:
 
 ```tsx
-import { QamposerProvider, useQamposer } from '@qamposer/react';
+import { QamposerProvider, useQamposer, qiskitAdapter } from '@qamposer/react';
 
 function CustomEditor() {
   const {
@@ -213,14 +220,24 @@ function CustomEditor() {
   );
 }
 
+// Editor-only mode (default)
 function App() {
   return (
-    <QamposerProvider adapter={qiskitAdapter('http://localhost:8000')}>
+    <QamposerProvider>
       <CustomEditor />
     </QamposerProvider>
   );
 }
-```
+
+// With backend simulation
+function AppWithSimulation() {
+  return (
+    <QamposerProvider adapter={qiskitAdapter('http://localhost:8080')}>
+      <CustomEditor />
+    </QamposerProvider>
+  );
+}
+``` -->
 
 <!-- ### Individual Components -->
 
