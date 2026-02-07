@@ -125,6 +125,48 @@ export function QamposerProvider({
     adapter.isAvailable().then(setCanSimulate);
   }, [adapter]);
 
+  // Auto-simulation: run ideal simulator whenever circuit changes
+  const autoSimRequestId = useRef(0);
+
+  useEffect(() => {
+    if (!canSimulate || circuit.gates.length === 0) {
+      if (circuit.gates.length === 0) {
+        setResult(null);
+      }
+      return;
+    }
+
+    const requestId = ++autoSimRequestId.current;
+
+    setStatus('simulating');
+    setError(null);
+
+    const request = {
+      qubits: circuit.qubits,
+      gates: circuit.gates.map(({ id: _, ...gate }) => gate),
+      shots: 1024,
+      profile: { type: 'ideal' as const },
+    };
+
+    adapter
+      .simulate(request)
+      .then((simulationResult) => {
+        if (autoSimRequestId.current !== requestId) return;
+        setResult(simulationResult);
+        setStatus('idle');
+        onSimulationComplete?.({
+          result: simulationResult,
+          circuit: { ...circuit },
+          qasm: circuitToQasm(circuit),
+        });
+      })
+      .catch((err) => {
+        if (autoSimRequestId.current !== requestId) return;
+        setError(err instanceof Error ? err : new Error(String(err)));
+        setStatus('error');
+      });
+  }, [circuit, canSimulate, adapter, onSimulationComplete]);
+
   // === Circuit Actions ===
 
   const addGate = useCallback(
@@ -350,6 +392,9 @@ export function QamposerProvider({
 
   const simulate = useCallback(
     async (shots: number = 1024, profile?: SimulationProfile): Promise<SimulationResult> => {
+      // Invalidate any in-flight auto-simulation
+      autoSimRequestId.current++;
+
       if (!canSimulate) {
         throw new Error('Simulation adapter is not available');
       }

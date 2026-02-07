@@ -57,11 +57,11 @@ export function SimulationControls({
 
   // Backend selection state
   const [backends, setBackends] = useState<BackendInfo[]>([]);
-  const [selectedBackendId, setSelectedBackendId] = useState<string>('ideal');
+  const [selectedBackendId, setSelectedBackendId] = useState<string>('');
   const [isLoadingBackends, setIsLoadingBackends] = useState(false);
   const [backendError, setBackendError] = useState(false);
 
-  // Load backends when dialog opens
+  // Load backends when dialog opens (ideal is excluded since it runs automatically)
   useEffect(() => {
     if (isDialogOpen && adapter.getBackends) {
       setIsLoadingBackends(true);
@@ -69,9 +69,16 @@ export function SimulationControls({
       adapter
         .getBackends()
         .then((result) => {
-          setBackends(result);
-          // If only 1 backend (ideal fallback) and canSimulate is false, backend is unavailable
-          if (result.length === 1 && result[0].id === 'ideal' && !canSimulate) {
+          const nonIdealBackends = result.filter((b) => b.backend_type !== 'ideal');
+          setBackends(nonIdealBackends);
+
+          // Auto-select first fake backend
+          const firstFake = nonIdealBackends.find((b) => b.backend_type === 'noisy_fake');
+          if (firstFake) {
+            setSelectedBackendId(firstFake.id);
+          }
+
+          if (nonIdealBackends.length === 0 && !canSimulate) {
             setBackendError(true);
           }
         })
@@ -82,13 +89,12 @@ export function SimulationControls({
   const selectedBackend = backends.find((b) => b.id === selectedBackendId);
 
   const buildProfile = (): SimulationProfile | undefined => {
-    if (!selectedBackend || selectedBackend.backend_type === 'ideal') {
-      return { type: 'ideal' };
+    if (!selectedBackend || selectedBackend.backend_type === 'noisy_fake') {
+      return selectedBackend
+        ? { type: 'noisy_fake', backend_name: selectedBackend.id }
+        : undefined;
     }
-    return {
-      type: 'noisy_fake',
-      backend_name: selectedBackend.id,
-    };
+    return undefined;
   };
 
   const handleRun = async () => {
@@ -184,39 +190,45 @@ export function SimulationControls({
                   </div>
                 ) : (
                   <div className="simulation-controls__backend-list">
-                    {backends.map((backend) => (
-                      <button
-                        key={backend.id}
-                        type="button"
-                        className={`simulation-controls__backend-item ${
-                          selectedBackendId === backend.id
-                            ? 'simulation-controls__backend-item--selected'
-                            : ''
-                        }`}
-                        onClick={() => setSelectedBackendId(backend.id)}
-                      >
-                        <div className="simulation-controls__backend-item-content">
-                          <div className="simulation-controls__backend-item-header">
-                            <span className="simulation-controls__backend-name">
-                              {backend.name}
-                            </span>
-                            <span
-                              className={`simulation-controls__backend-type simulation-controls__backend-type--${backend.backend_type}`}
-                            >
-                              {backend.backend_type === 'ideal' ? 'Ideal' : 'Noisy'}
-                            </span>
+                    {backends.map((backend) => {
+                      const isReal = backend.backend_type === 'real';
+                      return (
+                        <button
+                          key={backend.id}
+                          type="button"
+                          className={`simulation-controls__backend-item ${
+                            selectedBackendId === backend.id
+                              ? 'simulation-controls__backend-item--selected'
+                              : ''
+                          } ${isReal ? 'simulation-controls__backend-item--disabled' : ''}`}
+                          onClick={() => !isReal && setSelectedBackendId(backend.id)}
+                          disabled={isReal}
+                        >
+                          <div className="simulation-controls__backend-item-content">
+                            <div className="simulation-controls__backend-item-header">
+                              <span className="simulation-controls__backend-name">
+                                {backend.name}
+                              </span>
+                              <span
+                                className={`simulation-controls__backend-type simulation-controls__backend-type--${backend.backend_type}`}
+                              >
+                                {backend.backend_type === 'noisy_fake' ? 'Noisy' : 'Real'}
+                              </span>
+                            </div>
+                            <p className="simulation-controls__backend-desc">
+                              {isReal
+                                ? 'Coming soon'
+                                : backend.description || `${backend.num_qubits} qubits`}
+                            </p>
                           </div>
-                          <p className="simulation-controls__backend-desc">
-                            {backend.description || `${backend.num_qubits} qubits`}
-                          </p>
-                        </div>
-                        {selectedBackendId === backend.id && (
-                          <span className="simulation-controls__backend-check">
-                            <CheckIcon />
-                          </span>
-                        )}
-                      </button>
-                    ))}
+                          {selectedBackendId === backend.id && (
+                            <span className="simulation-controls__backend-check">
+                              <CheckIcon />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

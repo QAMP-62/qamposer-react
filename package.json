@@ -26,8 +26,7 @@
         "types": "./dist/visualization.d.cts",
         "default": "./dist/visualization.cjs"
       }
-    },
-    "./styles.css": "./dist/styles.css"
+    }
   },
   "files": [
     "dist"

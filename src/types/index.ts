@@ -44,7 +44,7 @@ export interface Circuit {
 // Backend Types
 // ============================================================================
 
-export type BackendType = 'ideal' | 'noisy_fake';
+export type BackendType = 'ideal' | 'noisy_fake' | 'real';
 
 export interface SimulationProfile {
   type: BackendType;
