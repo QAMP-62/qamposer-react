@@ -61,6 +61,15 @@ export function SimulationControls({
   const [isLoadingBackends, setIsLoadingBackends] = useState(false);
   const [backendError, setBackendError] = useState(false);
 
+  // Static placeholder for real hardware (not yet implemented)
+  const realHardwareEntry: BackendInfo = {
+    id: 'real_hardware',
+    name: 'Real Hardware',
+    num_qubits: 0,
+    backend_type: 'real',
+    description: 'Coming soon',
+  };
+
   // Load backends when dialog opens (ideal is excluded since it runs automatically)
   useEffect(() => {
     if (isDialogOpen && adapter.getBackends) {
@@ -69,16 +78,16 @@ export function SimulationControls({
       adapter
         .getBackends()
         .then((result) => {
-          const nonIdealBackends = result.filter((b) => b.backend_type !== 'ideal');
-          setBackends(nonIdealBackends);
+          // Keep only noisy_fake backends, then append static real hardware entry
+          const fakeBackends = result.filter((b) => b.backend_type === 'noisy_fake');
+          setBackends([...fakeBackends, realHardwareEntry]);
 
           // Auto-select first fake backend
-          const firstFake = nonIdealBackends.find((b) => b.backend_type === 'noisy_fake');
-          if (firstFake) {
-            setSelectedBackendId(firstFake.id);
+          if (fakeBackends.length > 0) {
+            setSelectedBackendId(fakeBackends[0].id);
           }
 
-          if (nonIdealBackends.length === 0 && !canSimulate) {
+          if (fakeBackends.length === 0 && !canSimulate) {
             setBackendError(true);
           }
         })
