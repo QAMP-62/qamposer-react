@@ -34,6 +34,6 @@ jobs:
 
       - run: pnpm build
 
+      # Trusted Publishing (OIDC) + provenance
+      # NOTE: Do NOT set NODE_AUTH_TOKEN / NPM_TOKEN here.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
