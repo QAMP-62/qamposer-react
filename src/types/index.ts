@@ -121,8 +121,16 @@ export interface QamposerProviderProps {
   onCircuitChange?: (circuit: Circuit) => void;
   /** Uncontrolled mode: initial circuit */
   defaultCircuit?: Circuit;
-  /** Simulation adapter for backend communication */
+  /** Simulation adapter for backend communication (used by "Set up and run") */
   adapter?: SimulationAdapter;
+  /**
+   * Adapter for real-time ideal simulation on circuit changes.
+   * If provided, auto-simulation uses this adapter instead of the main adapter.
+   * This allows using a client-side simulator for instant results
+   * while keeping the main adapter for noisy/real backend simulations.
+   * If not provided, auto-simulation uses the main adapter.
+   */
+  realtimeAdapter?: SimulationAdapter;
   /** Callback when simulation completes (includes circuit info) */
   onSimulationComplete?: (event: SimulationCompleteEvent) => void;
   /** Configuration options */

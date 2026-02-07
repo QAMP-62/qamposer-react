@@ -33,8 +33,16 @@ export interface QamposerProviderProps {
   onCircuitChange?: (circuit: Circuit) => void;
   /** Uncontrolled mode: initial circuit */
   defaultCircuit?: Circuit;
-  /** Simulation adapter for backend communication */
+  /** Simulation adapter for backend communication (used by "Set up and run") */
   adapter?: SimulationAdapter;
+  /**
+   * Adapter for real-time ideal simulation on circuit changes.
+   * If provided, auto-simulation uses this adapter instead of the main adapter.
+   * This allows using a client-side simulator for instant results
+   * while keeping the main adapter for noisy/real backend simulations.
+   * If not provided, auto-simulation uses the main adapter.
+   */
+  realtimeAdapter?: SimulationAdapter;
   /** Callback when simulation completes (includes circuit info) */
   onSimulationComplete?: (event: SimulationCompleteEvent) => void;
   /** Configuration options */
@@ -47,6 +55,7 @@ export function QamposerProvider({
   onCircuitChange,
   defaultCircuit = DEFAULT_CIRCUIT,
   adapter = noopAdapter,
+  realtimeAdapter,
   onSimulationComplete,
   config: userConfig,
   children,
@@ -126,10 +135,18 @@ export function QamposerProvider({
   }, [adapter]);
 
   // Auto-simulation: run ideal simulator whenever circuit changes
+  // Uses realtimeAdapter if provided, otherwise falls back to the main adapter
+  const resolvedRealtimeAdapter = realtimeAdapter ?? adapter;
+
+  const [canAutoSimulate, setCanAutoSimulate] = useState(false);
+  useEffect(() => {
+    resolvedRealtimeAdapter.isAvailable().then(setCanAutoSimulate);
+  }, [resolvedRealtimeAdapter]);
+
   const autoSimRequestId = useRef(0);
 
   useEffect(() => {
-    if (!canSimulate || circuit.gates.length === 0) {
+    if (!canAutoSimulate || circuit.gates.length === 0) {
       if (circuit.gates.length === 0) {
         setResult(null);
       }
@@ -148,7 +165,7 @@ export function QamposerProvider({
       profile: { type: 'ideal' as const },
     };
 
-    adapter
+    resolvedRealtimeAdapter
       .simulate(request)
       .then((simulationResult) => {
         if (autoSimRequestId.current !== requestId) return;
@@ -165,7 +182,7 @@ export function QamposerProvider({
         setError(err instanceof Error ? err : new Error(String(err)));
         setStatus('error');
       });
-  }, [circuit, canSimulate, adapter, onSimulationComplete]);
+  }, [circuit, canAutoSimulate, resolvedRealtimeAdapter, onSimulationComplete]);
 
   // === Circuit Actions ===
 
