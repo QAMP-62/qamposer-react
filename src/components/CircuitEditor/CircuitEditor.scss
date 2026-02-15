@@ -14,6 +14,11 @@
     padding-right: 72px; // Space for measurement icons
   }
 
+  &__labels {
+    flex-shrink: 0;
+    width: 60px;
+  }
+
   &__scroll-container {
     flex: 1;
     overflow-x: auto;
@@ -61,12 +66,15 @@
   }
 
   &__lane-label {
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
     width: 60px;
     font-family: 'IBM Plex Mono', 'Menlo', 'Monaco', monospace;
     font-size: 0.875rem;
     color: var(--qamposer-text-secondary, #a8a8a8);
     padding-right: 1rem;
-    text-align: right;
     flex-shrink: 0;
     cursor: pointer;
     border-radius: 4px;
@@ -79,6 +87,16 @@
     &--selected {
       background-color: var(--qamposer-selected, rgba(66, 133, 244, 0.2));
       color: var(--qamposer-text-primary, #f4f4f4);
+    }
+
+    &--classical {
+      border-top: 1px solid var(--qamposer-border, #525252);
+      margin-top: 1rem;
+      cursor: default;
+
+      &:hover {
+        background-color: transparent;
+      }
     }
   }
 
@@ -96,7 +114,7 @@
 
   &__drop-zone-continuous {
     position: absolute;
-    left: 60px;
+    left: 0;
     right: 0;
     top: 0;
     height: 100%;

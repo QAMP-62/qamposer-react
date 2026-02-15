@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { useQamposer } from '../../hooks/useQamposer';
 import { compactGates, generateGateId } from '../../utils/openqasm';
 import type { Gate, GateType } from '../../types';
@@ -16,8 +16,7 @@ const GATE_COLORS: Record<GateType, string> = {
 };
 
 const QUBIT_HEIGHT = 80;
-const MAX_POSITIONS = 20;
-const LABEL_WIDTH = 60;
+const MIN_POSITIONS = 20;
 const COLUMN_GAP = 20;
 const MIN_LEFT_MARGIN = 16;
 
@@ -39,13 +38,27 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
   const [previewShiftedGates, setPreviewShiftedGates] = useState<
     { id: string; newPosition: number }[]
   >([]);
-  const canvasRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number | null>(null);
+  const lastDropPositionRef = useRef<{ qubit: number; position: number } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, []);
+
+  // Dynamic number of columns: at least MIN_POSITIONS, or enough for all gates + 2 extra
+  const maxGatePos = gates.length > 0 ? Math.max(...gates.map((g) => g.position)) : 0;
+  const numPositions = Math.max(MIN_POSITIONS, maxGatePos + 3);
 
   // Calculate column widths based on gate content
   const columnWidths = useMemo(() => {
     const widths: Record<number, number> = {};
 
-    for (let pos = 0; pos < MAX_POSITIONS; pos++) {
+    for (let pos = 0; pos < numPositions; pos++) {
       let maxWidth = 32;
 
       gates.forEach((g) => {
@@ -67,15 +80,15 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
     }
 
     return widths;
-  }, [gates]);
+  }, [gates, numPositions]);
 
   // Calculate left X positions for each column
   const columnLeftXs = useMemo(() => {
     const leftXs: Record<number, number> = {};
 
-    for (let pos = 0; pos < MAX_POSITIONS; pos++) {
+    for (let pos = 0; pos < numPositions; pos++) {
       if (pos === 0) {
-        leftXs[pos] = LABEL_WIDTH + MIN_LEFT_MARGIN;
+        leftXs[pos] = MIN_LEFT_MARGIN;
       } else {
         const prevLeftX = leftXs[pos - 1];
         const prevWidth = columnWidths[pos - 1];
@@ -85,18 +98,18 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
     }
 
     return leftXs;
-  }, [columnWidths]);
+  }, [columnWidths, numPositions]);
 
   // Calculate center X positions for each column
   const columnCenterXs = useMemo(() => {
     const centerXs: Record<number, number> = {};
 
-    for (let pos = 0; pos < MAX_POSITIONS; pos++) {
+    for (let pos = 0; pos < numPositions; pos++) {
       centerXs[pos] = columnLeftXs[pos] + columnWidths[pos] / 2;
     }
 
     return centerXs;
-  }, [columnLeftXs, columnWidths]);
+  }, [columnLeftXs, columnWidths, numPositions]);
 
   // Get qubits occupied by a gate.
   // For CNOT, this includes all qubits between control and target
@@ -115,7 +128,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
   };
 
   // Calculate drop position based on mouse X
-  const calculateDropPosition = (
+  const calculateDropPosition = useCallback((
     mouseX: number,
     qubit: number,
     gateType: GateType
@@ -128,7 +141,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
   } => {
     let closestPos = 0;
     let minDistance = Infinity;
-    for (let pos = 0; pos < MAX_POSITIONS; pos++) {
+    for (let pos = 0; pos < numPositions; pos++) {
       const distance = Math.abs(columnCenterXs[pos] - mouseX);
       if (distance < minDistance) {
         minDistance = distance;
@@ -200,39 +213,78 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
     });
 
     return { initialPosition, finalPosition, shiftedGates, control, target };
-  };
+  }, [columnCenterXs, gates, qubits, numPositions]);
 
-  const handleDragOver = (event: React.DragEvent, qubit: number) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
+  const handleDragOver = useCallback(
+    (event: React.DragEvent, qubit: number) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
 
-    let gateType: GateType | null = draggingGateType;
-    if (!gateType) {
-      const mimeType = event.dataTransfer.types.find((t) => t.startsWith('application/x-gate-'));
-      if (mimeType) {
-        gateType = mimeType.replace('application/x-gate-', '').toUpperCase() as GateType;
-        setDraggingGateType(gateType);
+      let gateType: GateType | null = draggingGateType;
+      if (!gateType) {
+        const mimeType = event.dataTransfer.types.find((t) => t.startsWith('application/x-gate-'));
+        if (mimeType) {
+          gateType = mimeType.replace('application/x-gate-', '').toUpperCase() as GateType;
+          setDraggingGateType(gateType);
+        }
       }
-    }
 
-    setDragOverQubit(qubit);
+      // Capture values before rAF callback (event may be reused)
+      const clientX = event.clientX;
+      const currentGateType = gateType;
 
-    if (canvasRef.current && gateType) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      const { finalPosition, shiftedGates } = calculateDropPosition(mouseX, qubit, gateType);
-      setDragOverPosition(finalPosition);
-      setPreviewShiftedGates(shiftedGates);
-    }
-  };
+      // Cancel any pending rAF to avoid stacking
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+
+        if (!scrollContainerRef.current || !currentGateType) return;
+
+        // Use scroll container rect + scrollLeft for scroll-independent coordinate
+        const containerRect = scrollContainerRef.current.getBoundingClientRect();
+        const scrollLeft = scrollContainerRef.current.scrollLeft;
+        const mouseX = clientX - containerRect.left + scrollLeft;
+        const { finalPosition, shiftedGates } = calculateDropPosition(
+          mouseX,
+          qubit,
+          currentGateType
+        );
+
+        // Stability check: skip setState if position hasn't changed
+        const last = lastDropPositionRef.current;
+        if (last && last.qubit === qubit && last.position === finalPosition) {
+          return;
+        }
+
+        lastDropPositionRef.current = { qubit, position: finalPosition };
+        setDragOverQubit(qubit);
+        setDragOverPosition(finalPosition);
+        setPreviewShiftedGates(shiftedGates);
+      });
+    },
+    [draggingGateType, calculateDropPosition]
+  );
 
   const handleDragLeave = () => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    lastDropPositionRef.current = null;
     setDragOverQubit(null);
     setDragOverPosition(null);
     setPreviewShiftedGates([]);
   };
 
   const handleDragEnd = () => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    lastDropPositionRef.current = null;
     setDragOverQubit(null);
     setDragOverPosition(null);
     setPreviewShiftedGates([]);
@@ -241,21 +293,27 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
 
   const handleDrop = (event: React.DragEvent, qubit: number) => {
     event.preventDefault();
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    lastDropPositionRef.current = null;
     setDragOverQubit(null);
     setDragOverPosition(null);
     setDraggingGateType(null);
     setPreviewShiftedGates([]);
 
     const gateType = event.dataTransfer.getData('gateType') as GateType;
-    if (!gateType || !canvasRef.current) return;
+    if (!gateType || !scrollContainerRef.current) return;
 
     if (gates.length >= config.maxGates) {
       console.warn(`Maximum gate limit (${config.maxGates}) reached`);
       return;
     }
 
-    const rect = canvasRef.current.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
+    const containerRect = scrollContainerRef.current.getBoundingClientRect();
+    const scrollLeft = scrollContainerRef.current.scrollLeft;
+    const mouseX = event.clientX - containerRect.left + scrollLeft;
     const { initialPosition, control, target } = calculateDropPosition(mouseX, qubit, gateType);
 
     const targetQubits =
@@ -387,18 +445,38 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
   const selectedGate = selectedGateId ? gates.find((g) => g.id === selectedGateId) : null;
 
   // Calculate the required width for all gates
-  const maxGatePosition = gates.length > 0 ? Math.max(...gates.map((g) => g.position)) : 0;
-  const lastColumnRightEdge =
-    columnLeftXs[maxGatePosition] + columnWidths[maxGatePosition] + COLUMN_GAP;
-  const minCircuitWidth = Math.max(lastColumnRightEdge, 400); // Minimum width
+  // Always include space for one more column after the last gate to prevent edge oscillation
+  const nextPos = maxGatePos + 1;
+  const nextColumnRightEdge =
+    columnLeftXs[nextPos] + columnWidths[nextPos] + COLUMN_GAP;
+  const minCircuitWidth = Math.max(nextColumnRightEdge, 400);
 
   return (
     <div className={`circuit-editor ${className}`.trim()} onDragEnd={handleDragEnd}>
       <div className="circuit-editor__canvas">
+        {/* Fixed qubit labels - outside scroll area */}
+        <div className="circuit-editor__labels">
+          {Array.from({ length: qubits }).map((_, qubitIndex) => (
+            <div
+              key={qubitIndex}
+              className={`circuit-editor__lane-label ${
+                selectedQubitIndex === qubitIndex
+                  ? 'circuit-editor__lane-label--selected'
+                  : ''
+              }`}
+              onClick={() => handleQubitClick(qubitIndex)}
+            >
+              q[{qubitIndex}]
+            </div>
+          ))}
+          <div className="circuit-editor__lane-label circuit-editor__lane-label--classical">
+            c{qubits}
+          </div>
+        </div>
+
         {/* Scrollable circuit area */}
-        <div className="circuit-editor__scroll-container">
+        <div className="circuit-editor__scroll-container" ref={scrollContainerRef}>
           <div
-            ref={canvasRef}
             className="circuit-editor__circuit-area"
             style={{ minWidth: `${minCircuitWidth}px` }}
           >
@@ -406,16 +484,6 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
             <div className="circuit-editor__lanes">
               {Array.from({ length: qubits }).map((_, qubitIndex) => (
                 <div key={qubitIndex} className="circuit-editor__lane">
-                  <div
-                    className={`circuit-editor__lane-label ${
-                      selectedQubitIndex === qubitIndex
-                        ? 'circuit-editor__lane-label--selected'
-                        : ''
-                    }`}
-                    onClick={() => handleQubitClick(qubitIndex)}
-                  >
-                    q[{qubitIndex}]
-                  </div>
                   <div className="circuit-editor__lane-line" />
 
                   <div
@@ -429,7 +497,6 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
 
               {/* Classical register lane */}
               <div className="circuit-editor__lane circuit-editor__lane--classical">
-                <div className="circuit-editor__lane-label">c{qubits}</div>
                 <div className="circuit-editor__lane-line circuit-editor__lane-line--classical" />
               </div>
             </div>
@@ -602,7 +669,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
               <QubitToolbar
                 position={{
                   top: selectedQubitIndex * QUBIT_HEIGHT + QUBIT_HEIGHT / 2,
-                  left: LABEL_WIDTH,
+                  left: 0,
                 }}
                 canAdd={qubits < config.maxQubits}
                 canRemove={qubits > 1}
