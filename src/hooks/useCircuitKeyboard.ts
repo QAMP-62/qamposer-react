@@ -46,13 +46,20 @@ export function useCircuitKeyboard({
   const inputSource = useInputSource(containerRef);
   const { pushState, undo, redo, canUndo, canRedo } = useUndoRedo(circuit.gates, updateGates);
 
-  // Keep refs for values used in callbacks
+  // Refs for latest values — synced in effects, read only in event handlers
   const circuitRef = useRef(circuit);
-  circuitRef.current = circuit;
   const cursorRef = useRef(cursor);
-  cursorRef.current = cursor;
   const interactionStateRef = useRef(interactionState);
-  interactionStateRef.current = interactionState;
+  const numPositionsRef = useRef(numPositions);
+  const columnLeftXsRef = useRef(columnLeftXs);
+  const columnWidthsRef = useRef(columnWidths);
+
+  useEffect(() => { circuitRef.current = circuit; }, [circuit]);
+  useEffect(() => { cursorRef.current = cursor; }, [cursor]);
+  useEffect(() => { interactionStateRef.current = interactionState; }, [interactionState]);
+  useEffect(() => { numPositionsRef.current = numPositions; }, [numPositions]);
+  useEffect(() => { columnLeftXsRef.current = columnLeftXs; }, [columnLeftXs]);
+  useEffect(() => { columnWidthsRef.current = columnWidths; }, [columnWidths]);
 
   // Clamp cursor when grid bounds change
   useEffect(() => {
@@ -77,12 +84,10 @@ export function useCircuitKeyboard({
             ...(command.parameter !== undefined ? { parameter: command.parameter } : {}),
           };
 
-          // Shift existing gates on the same qubit at or after this position
           const shifted = gates.map((g) => {
             if (g.qubit === command.row && g.position >= command.col) {
               return { ...g, position: g.position + 1 };
             }
-            // Also shift CNOT gates that span this qubit
             if (
               g.type === 'CNOT' &&
               g.control !== undefined &&
@@ -114,16 +119,11 @@ export function useCircuitKeyboard({
           const minQ = Math.min(command.controlRow, command.targetRow);
           const maxQ = Math.max(command.controlRow, command.targetRow);
 
-          // Shift existing gates on any qubit in the CNOT range at or after this position
           const shifted = gates.map((g) => {
             if (g.position < command.col) return g;
-
             const gateQubits = getGateQubits(g);
             const overlaps = gateQubits.some((q) => q >= minQ && q <= maxQ);
-            if (overlaps) {
-              return { ...g, position: g.position + 1 };
-            }
-            return g;
+            return overlaps ? { ...g, position: g.position + 1 } : g;
           });
 
           pushState(compactGates([...shifted, newGate]));
@@ -155,7 +155,7 @@ export function useCircuitKeyboard({
     (action: InteractionAction) => {
       const bounds = {
         maxRow: Math.max(0, circuitRef.current.qubits - 1),
-        maxCol: Math.max(0, numPositions - 1),
+        maxCol: Math.max(0, numPositionsRef.current - 1),
       };
 
       const result = interactionFsm(
@@ -173,10 +173,12 @@ export function useCircuitKeyboard({
       }
 
       // Auto-scroll to keep cursor visible
-      if (action.type === 'MOVE_CURSOR' && containerRef.current && columnLeftXs && columnWidths) {
+      const colLeftXs = columnLeftXsRef.current;
+      const colWidths = columnWidthsRef.current;
+      if (action.type === 'MOVE_CURSOR' && containerRef.current && colLeftXs && colWidths) {
         const container = containerRef.current;
-        const colLeft = columnLeftXs[result.cursor.col] ?? 0;
-        const colWidth = columnWidths[result.cursor.col] ?? 32;
+        const colLeft = colLeftXs[result.cursor.col] ?? 0;
+        const colWidth = colWidths[result.cursor.col] ?? 32;
         const colRight = colLeft + colWidth;
 
         const visibleLeft = container.scrollLeft;
@@ -189,10 +191,9 @@ export function useCircuitKeyboard({
         }
       }
     },
-    [numPositions, executeCommand, containerRef, columnLeftXs, columnWidths]
+    [executeCommand, containerRef]
   );
 
-  // Wire up key repeat handler
   useKeyRepeat(handleAction, containerRef, enabled);
 
   return {

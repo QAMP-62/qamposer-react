@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { Gate } from '../types';
 
 const MAX_HISTORY = 50;
@@ -14,15 +14,27 @@ export function useUndoRedo(
   const pastRef = useRef<Gate[][]>([]);
   const futureRef = useRef<Gate[][]>([]);
   const currentRef = useRef<Gate[]>(currentGates);
-  currentRef.current = currentGates;
+
+  useEffect(() => {
+    currentRef.current = currentGates;
+  }, [currentGates]);
+
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  const syncFlags = useCallback(() => {
+    setCanUndo(pastRef.current.length > 0);
+    setCanRedo(futureRef.current.length > 0);
+  }, []);
 
   const pushState = useCallback(
     (newGates: Gate[]) => {
       pastRef.current = [...pastRef.current.slice(-MAX_HISTORY + 1), currentRef.current];
       futureRef.current = [];
       updateGates(newGates);
+      syncFlags();
     },
-    [updateGates]
+    [updateGates, syncFlags]
   );
 
   const undo = useCallback(() => {
@@ -31,7 +43,8 @@ export function useUndoRedo(
     pastRef.current = pastRef.current.slice(0, -1);
     futureRef.current = [...futureRef.current, currentRef.current];
     updateGates(prev);
-  }, [updateGates]);
+    syncFlags();
+  }, [updateGates, syncFlags]);
 
   const redo = useCallback(() => {
     if (futureRef.current.length === 0) return;
@@ -39,13 +52,8 @@ export function useUndoRedo(
     futureRef.current = futureRef.current.slice(0, -1);
     pastRef.current = [...pastRef.current, currentRef.current];
     updateGates(next);
-  }, [updateGates]);
+    syncFlags();
+  }, [updateGates, syncFlags]);
 
-  return {
-    pushState,
-    undo,
-    redo,
-    canUndo: pastRef.current.length > 0,
-    canRedo: futureRef.current.length > 0,
-  };
+  return { pushState, undo, redo, canUndo, canRedo };
 }
