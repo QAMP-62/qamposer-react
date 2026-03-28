@@ -514,6 +514,7 @@ export function QamposerProvider({
       clearCircuit,
       importQasm,
       exportQasm,
+      setQasmCode,
       simulate,
       canSimulate,
       adapter,
