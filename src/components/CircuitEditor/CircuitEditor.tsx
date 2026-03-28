@@ -1,6 +1,9 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { useQamposer } from '../../hooks/useQamposer';
+import { useCircuitKeyboard } from '../../hooks/useCircuitKeyboard';
 import { compactGates, generateGateId } from '../../utils/openqasm';
+import { CursorOverlay } from '../CursorOverlay';
+import { StatusBar } from '../StatusBar';
 import type { Gate, GateType } from '../../types';
 import './CircuitEditor.scss';
 
@@ -110,6 +113,24 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
 
     return centerXs;
   }, [columnLeftXs, columnWidths, numPositions]);
+
+  // Keyboard navigation
+  const { cursor, interactionState, inputSource } = useCircuitKeyboard({
+    circuit,
+    updateGates,
+    containerRef: scrollContainerRef,
+    numPositions,
+    columnLeftXs,
+    columnWidths,
+  });
+
+  // Clear gate selection when keyboard becomes active
+  useEffect(() => {
+    if (inputSource === 'keyboard') {
+      setSelectedGateId(null);
+      setSelectedQubitIndex(null);
+    }
+  }, [inputSource]);
 
   // Get qubits occupied by a gate.
   // For CNOT, this includes all qubits between control and target
@@ -475,7 +496,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
         </div>
 
         {/* Scrollable circuit area */}
-        <div className="circuit-editor__scroll-container" ref={scrollContainerRef}>
+        <div className="circuit-editor__scroll-container" ref={scrollContainerRef} tabIndex={0}>
           <div
             className="circuit-editor__circuit-area"
             style={{ minWidth: `${minCircuitWidth}px` }}
@@ -510,6 +531,14 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
                 })
                 .map(renderGate)}
             </div>
+
+            {/* Keyboard cursor overlay */}
+            <CursorOverlay
+              cursor={cursor}
+              interactionState={interactionState}
+              inputSource={inputSource}
+              columnCenterXs={columnCenterXs}
+            />
 
             {/* New gate drop preview */}
             {dragOverQubit !== null && dragOverPosition !== null && draggingGateType && (
@@ -695,6 +724,13 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
           ))}
         </div>
       </div>
+
+      {/* Status bar for keyboard mode */}
+      <StatusBar
+        interactionState={interactionState}
+        cursor={cursor}
+        inputSource={inputSource}
+      />
     </div>
   );
 }

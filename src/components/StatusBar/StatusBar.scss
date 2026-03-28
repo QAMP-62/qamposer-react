@@ -1,0 +1,33 @@
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  font-size: 0.6875rem;
+  font-family: 'IBM Plex Mono', 'Menlo', monospace;
+  color: var(--qamposer-text-secondary, #525252);
+  background: var(--qamposer-bg-secondary, #f4f4f4);
+  border-top: 1px solid var(--qamposer-border, #e0e0e0);
+  flex-shrink: 0;
+  min-height: 24px;
+
+  &__mode {
+    font-weight: 600;
+    color: var(--qamposer-accent, #4285f4);
+    letter-spacing: 0.5px;
+  }
+
+  &__separator {
+    width: 1px;
+    height: 12px;
+    background: var(--qamposer-border, #e0e0e0);
+  }
+
+  &__position {
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__hints {
+    color: var(--qamposer-text-tertiary, #8d8d8d);
+  }
+}

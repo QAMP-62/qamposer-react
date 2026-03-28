@@ -25,6 +25,12 @@
     overflow-y: visible;
     position: relative;
 
+    &:focus {
+      outline: 2px solid var(--qamposer-accent, #4285f4);
+      outline-offset: -2px;
+      border-radius: 4px;
+    }
+
     // Custom scrollbar
     &::-webkit-scrollbar {
       height: 8px;
