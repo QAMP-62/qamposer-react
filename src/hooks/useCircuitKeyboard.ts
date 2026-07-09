@@ -54,12 +54,24 @@ export function useCircuitKeyboard({
   const columnLeftXsRef = useRef(columnLeftXs);
   const columnWidthsRef = useRef(columnWidths);
 
-  useEffect(() => { circuitRef.current = circuit; }, [circuit]);
-  useEffect(() => { cursorRef.current = cursor; }, [cursor]);
-  useEffect(() => { interactionStateRef.current = interactionState; }, [interactionState]);
-  useEffect(() => { numPositionsRef.current = numPositions; }, [numPositions]);
-  useEffect(() => { columnLeftXsRef.current = columnLeftXs; }, [columnLeftXs]);
-  useEffect(() => { columnWidthsRef.current = columnWidths; }, [columnWidths]);
+  useEffect(() => {
+    circuitRef.current = circuit;
+  }, [circuit]);
+  useEffect(() => {
+    cursorRef.current = cursor;
+  }, [cursor]);
+  useEffect(() => {
+    interactionStateRef.current = interactionState;
+  }, [interactionState]);
+  useEffect(() => {
+    numPositionsRef.current = numPositions;
+  }, [numPositions]);
+  useEffect(() => {
+    columnLeftXsRef.current = columnLeftXs;
+  }, [columnLeftXs]);
+  useEffect(() => {
+    columnWidthsRef.current = columnWidths;
+  }, [columnWidths]);
 
   // Clamp cursor when grid bounds change
   useEffect(() => {
@@ -158,12 +170,7 @@ export function useCircuitKeyboard({
         maxCol: Math.max(0, numPositionsRef.current - 1),
       };
 
-      const result = interactionFsm(
-        interactionStateRef.current,
-        cursorRef.current,
-        action,
-        bounds
-      );
+      const result = interactionFsm(interactionStateRef.current, cursorRef.current, action, bounds);
 
       setInteractionState(result.state);
       setCursor(result.cursor);

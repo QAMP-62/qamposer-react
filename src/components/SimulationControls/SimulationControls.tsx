@@ -97,9 +97,7 @@ export function SimulationControls({
 
   const buildProfile = (): SimulationProfile | undefined => {
     if (!selectedBackend || selectedBackend.backend_type === 'noisy_fake') {
-      return selectedBackend
-        ? { type: 'noisy_fake', backend_name: selectedBackend.id }
-        : undefined;
+      return selectedBackend ? { type: 'noisy_fake', backend_name: selectedBackend.id } : undefined;
     }
     return undefined;
   };

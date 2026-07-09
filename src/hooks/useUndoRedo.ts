@@ -7,10 +7,7 @@ const MAX_HISTORY = 50;
  * Lightweight undo/redo stack for circuit gate operations.
  * Tracks gate arrays only (not qubit count changes).
  */
-export function useUndoRedo(
-  currentGates: Gate[],
-  updateGates: (gates: Gate[]) => void
-) {
+export function useUndoRedo(currentGates: Gate[], updateGates: (gates: Gate[]) => void) {
   const pastRef = useRef<Gate[][]>([]);
   const futureRef = useRef<Gate[][]>([]);
   const currentRef = useRef<Gate[]>(currentGates);

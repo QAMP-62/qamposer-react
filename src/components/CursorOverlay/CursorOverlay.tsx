@@ -55,9 +55,7 @@ export function CursorOverlay({
           </span>
         )}
         {interactionState.type === 'cnot_control' && (
-          <span className="cursor-overlay__gate-label cursor-overlay__gate-label--cnot">
-            Ctrl
-          </span>
+          <span className="cursor-overlay__gate-label cursor-overlay__gate-label--cnot">Ctrl</span>
         )}
         {interactionState.type === 'cnot_target' && (
           <span className="cursor-overlay__gate-label cursor-overlay__gate-label--cnot">

@@ -149,92 +149,95 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
   };
 
   // Calculate drop position based on mouse X
-  const calculateDropPosition = useCallback((
-    mouseX: number,
-    qubit: number,
-    gateType: GateType
-  ): {
-    initialPosition: number;
-    finalPosition: number;
-    shiftedGates: { id: string; newPosition: number }[];
-    control?: number;
-    target?: number;
-  } => {
-    let closestPos = 0;
-    let minDistance = Infinity;
-    for (let pos = 0; pos < numPositions; pos++) {
-      const distance = Math.abs(columnCenterXs[pos] - mouseX);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestPos = pos;
-      }
-    }
-
-    let targetQubits: number[];
-    let control: number | undefined;
-    let target: number | undefined;
-
-    if (gateType === 'CNOT') {
-      control = Math.min(qubit, qubits - 2);
-      target = control + 1;
-      targetQubits = [control, target];
-    } else {
-      targetQubits = [qubit];
-    }
-
-    const rightWall = gates
-      .filter((g) => {
-        if (g.type !== 'CNOT' || g.control === undefined || g.target === undefined) {
-          return false;
+  const calculateDropPosition = useCallback(
+    (
+      mouseX: number,
+      qubit: number,
+      gateType: GateType
+    ): {
+      initialPosition: number;
+      finalPosition: number;
+      shiftedGates: { id: string; newPosition: number }[];
+      control?: number;
+      target?: number;
+    } => {
+      let closestPos = 0;
+      let minDistance = Infinity;
+      for (let pos = 0; pos < numPositions; pos++) {
+        const distance = Math.abs(columnCenterXs[pos] - mouseX);
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestPos = pos;
         }
+      }
+
+      let targetQubits: number[];
+      let control: number | undefined;
+      let target: number | undefined;
+
+      if (gateType === 'CNOT') {
+        control = Math.min(qubit, qubits - 2);
+        target = control + 1;
+        targetQubits = [control, target];
+      } else {
+        targetQubits = [qubit];
+      }
+
+      const rightWall = gates
+        .filter((g) => {
+          if (g.type !== 'CNOT' || g.control === undefined || g.target === undefined) {
+            return false;
+          }
+          const gateQubits = getGateQubits(g);
+          return targetQubits.some((q) => gateQubits.includes(q)) && g.position > closestPos;
+        })
+        .sort((a, b) => a.position - b.position)[0];
+
+      let initialPosition: number;
+      if (rightWall) {
+        initialPosition = Math.min(closestPos, rightWall.position - 1);
+      } else {
+        initialPosition = closestPos;
+      }
+      initialPosition = Math.max(0, initialPosition);
+
+      const shiftedGatesForInsert = gates.map((g) => {
         const gateQubits = getGateQubits(g);
-        return targetQubits.some((q) => gateQubits.includes(q)) && g.position > closestPos;
-      })
-      .sort((a, b) => a.position - b.position)[0];
+        const overlapsQubit = targetQubits.some((q) => gateQubits.includes(q));
+        if (overlapsQubit && g.position >= initialPosition) {
+          return { ...g, position: g.position + 1 };
+        }
+        return g;
+      });
 
-    let initialPosition: number;
-    if (rightWall) {
-      initialPosition = Math.min(closestPos, rightWall.position - 1);
-    } else {
-      initialPosition = closestPos;
-    }
-    initialPosition = Math.max(0, initialPosition);
+      const tempGate: Gate = {
+        id: 'temp',
+        type: gateType,
+        position: initialPosition,
+        ...(gateType === 'CNOT' ? { control, target } : { qubit }),
+        ...(['RX', 'RY', 'RZ'].includes(gateType) ? { parameter: Math.PI / 2 } : {}),
+      };
 
-    const shiftedGatesForInsert = gates.map((g) => {
-      const gateQubits = getGateQubits(g);
-      const overlapsQubit = targetQubits.some((q) => gateQubits.includes(q));
-      if (overlapsQubit && g.position >= initialPosition) {
-        return { ...g, position: g.position + 1 };
-      }
-      return g;
-    });
+      const compacted = compactGates([...shiftedGatesForInsert, tempGate]);
+      const finalGate = compacted.find((g) => g.id === 'temp');
+      const finalPosition = finalGate ? finalGate.position : initialPosition;
 
-    const tempGate: Gate = {
-      id: 'temp',
-      type: gateType,
-      position: initialPosition,
-      ...(gateType === 'CNOT' ? { control, target } : { qubit }),
-      ...(['RX', 'RY', 'RZ'].includes(gateType) ? { parameter: Math.PI / 2 } : {}),
-    };
+      const shiftedGates: { id: string; newPosition: number }[] = [];
+      compacted.forEach((compactedGate) => {
+        if (compactedGate.id === 'temp') return;
+        const originalGate = gates.find((g) => g.id === compactedGate.id);
+        if (originalGate && originalGate.position !== compactedGate.position) {
+          shiftedGates.push({
+            id: compactedGate.id,
+            newPosition: compactedGate.position,
+          });
+        }
+      });
 
-    const compacted = compactGates([...shiftedGatesForInsert, tempGate]);
-    const finalGate = compacted.find((g) => g.id === 'temp');
-    const finalPosition = finalGate ? finalGate.position : initialPosition;
-
-    const shiftedGates: { id: string; newPosition: number }[] = [];
-    compacted.forEach((compactedGate) => {
-      if (compactedGate.id === 'temp') return;
-      const originalGate = gates.find((g) => g.id === compactedGate.id);
-      if (originalGate && originalGate.position !== compactedGate.position) {
-        shiftedGates.push({
-          id: compactedGate.id,
-          newPosition: compactedGate.position,
-        });
-      }
-    });
-
-    return { initialPosition, finalPosition, shiftedGates, control, target };
-  }, [columnCenterXs, gates, qubits, numPositions]);
+      return { initialPosition, finalPosition, shiftedGates, control, target };
+    },
+    [columnCenterXs, gates, qubits, numPositions]
+  );
 
   const handleDragOver = useCallback(
     (event: React.DragEvent, qubit: number) => {
@@ -468,8 +471,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
   // Calculate the required width for all gates
   // Always include space for one more column after the last gate to prevent edge oscillation
   const nextPos = maxGatePos + 1;
-  const nextColumnRightEdge =
-    columnLeftXs[nextPos] + columnWidths[nextPos] + COLUMN_GAP;
+  const nextColumnRightEdge = columnLeftXs[nextPos] + columnWidths[nextPos] + COLUMN_GAP;
   const minCircuitWidth = Math.max(nextColumnRightEdge, 400);
 
   return (
@@ -481,9 +483,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
             <div
               key={qubitIndex}
               className={`circuit-editor__lane-label ${
-                selectedQubitIndex === qubitIndex
-                  ? 'circuit-editor__lane-label--selected'
-                  : ''
+                selectedQubitIndex === qubitIndex ? 'circuit-editor__lane-label--selected' : ''
               }`}
               onClick={() => handleQubitClick(qubitIndex)}
             >
@@ -726,11 +726,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
       </div>
 
       {/* Status bar for keyboard mode */}
-      <StatusBar
-        interactionState={interactionState}
-        cursor={cursor}
-        inputSource={inputSource}
-      />
+      <StatusBar interactionState={interactionState} cursor={cursor} inputSource={inputSource} />
     </div>
   );
 }

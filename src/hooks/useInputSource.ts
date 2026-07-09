@@ -10,9 +10,7 @@ import type { InputSource } from '../keyboard/types';
  * but don't yet switch to full keyboard mode), 'keyboard' when keyboard is
  * actively used, and 'pointer' when unfocused or hovering.
  */
-export function useInputSource(
-  containerRef: React.RefObject<HTMLDivElement | null>
-): InputSource {
+export function useInputSource(containerRef: React.RefObject<HTMLDivElement | null>): InputSource {
   const [inputSource, setInputSource] = useState<InputSource>('pointer');
   const lastPointerPos = useRef<{ x: number; y: number } | null>(null);
 

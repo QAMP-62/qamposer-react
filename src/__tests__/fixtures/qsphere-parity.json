@@ -1,0 +1,269 @@
+{
+  "_comment": "Q-sphere parity fixture. Expected points generated with Qiskit 2.5.0 official plot_state_qsphere layout (state_visualization.py), pure-state path, using qiskit's own n_choose_k/bit_string_index. Points with probability < 1e-12 omitted. Consumed by both the qamposer-react vitest suite and the qamposer-backend pytest suite (atol 1e-9).",
+  "bell": {
+    "description": "Bell state (H q0, CNOT 0->1)",
+    "qubits": 2,
+    "gates": [
+      {
+        "type": "H",
+        "qubit": 0,
+        "position": 0
+      },
+      {
+        "type": "CNOT",
+        "control": 0,
+        "target": 1,
+        "position": 1
+      }
+    ],
+    "expected_qsphere": [
+      {
+        "state": "00",
+        "x": 0.0,
+        "y": 0.0,
+        "z": 1.0,
+        "probability": 0.4999999999999999,
+        "phase": 0.0
+      },
+      {
+        "state": "11",
+        "x": -0.0,
+        "y": -0.0,
+        "z": -1.0,
+        "probability": 0.4999999999999999,
+        "phase": 0.0
+      }
+    ]
+  },
+  "ghz3": {
+    "description": "GHZ state on 3 qubits",
+    "qubits": 3,
+    "gates": [
+      {
+        "type": "H",
+        "qubit": 0,
+        "position": 0
+      },
+      {
+        "type": "CNOT",
+        "control": 0,
+        "target": 1,
+        "position": 1
+      },
+      {
+        "type": "CNOT",
+        "control": 0,
+        "target": 2,
+        "position": 2
+      }
+    ],
+    "expected_qsphere": [
+      {
+        "state": "000",
+        "x": 0.0,
+        "y": 0.0,
+        "z": 1.0,
+        "probability": 0.4999999999999999,
+        "phase": 0.0
+      },
+      {
+        "state": "111",
+        "x": -0.0,
+        "y": -0.0,
+        "z": -1.0,
+        "probability": 0.4999999999999999,
+        "phase": 0.0
+      }
+    ]
+  },
+  "minus": {
+    "description": "|-> state (H q0, Z q0): relative phase pi on |1>",
+    "qubits": 1,
+    "gates": [
+      {
+        "type": "H",
+        "qubit": 0,
+        "position": 0
+      },
+      {
+        "type": "Z",
+        "qubit": 0,
+        "position": 1
+      }
+    ],
+    "expected_qsphere": [
+      {
+        "state": "0",
+        "x": 0.0,
+        "y": 0.0,
+        "z": 1.0,
+        "probability": 0.4999999999999999,
+        "phase": 0.0
+      },
+      {
+        "state": "1",
+        "x": -0.0,
+        "y": -0.0,
+        "z": -1.0,
+        "probability": 0.4999999999999999,
+        "phase": 3.141592653589793
+      }
+    ]
+  },
+  "uniform3": {
+    "description": "H on all 3 qubits: all 8 points, all rings, mirror rule",
+    "qubits": 3,
+    "gates": [
+      {
+        "type": "H",
+        "qubit": 0,
+        "position": 0
+      },
+      {
+        "type": "H",
+        "qubit": 1,
+        "position": 0
+      },
+      {
+        "type": "H",
+        "qubit": 2,
+        "position": 0
+      }
+    ],
+    "expected_qsphere": [
+      {
+        "state": "000",
+        "x": 0.0,
+        "y": 0.0,
+        "z": 1.0,
+        "probability": 0.12499999999999994,
+        "phase": 0.0
+      },
+      {
+        "state": "001",
+        "x": -0.4714045207910315,
+        "y": 0.816496580927726,
+        "z": 0.33333333333333337,
+        "probability": 0.12499999999999994,
+        "phase": 0.0
+      },
+      {
+        "state": "010",
+        "x": -0.4714045207910321,
+        "y": -0.8164965809277258,
+        "z": 0.33333333333333337,
+        "probability": 0.12499999999999994,
+        "phase": 0.0
+      },
+      {
+        "state": "011",
+        "x": -0.9428090415820634,
+        "y": -5.341521298137391e-16,
+        "z": -0.33333333333333326,
+        "probability": 0.12499999999999994,
+        "phase": 0.0
+      },
+      {
+        "state": "100",
+        "x": 0.9428090415820634,
+        "y": -2.3092161499613154e-16,
+        "z": 0.33333333333333337,
+        "probability": 0.12499999999999994,
+        "phase": 0.0
+      },
+      {
+        "state": "101",
+        "x": 0.47140452079103107,
+        "y": 0.8164965809277264,
+        "z": -0.33333333333333326,
+        "probability": 0.12499999999999994,
+        "phase": 0.0
+      },
+      {
+        "state": "110",
+        "x": 0.47140452079103284,
+        "y": -0.8164965809277254,
+        "z": -0.33333333333333326,
+        "probability": 0.12499999999999994,
+        "phase": 0.0
+      },
+      {
+        "state": "111",
+        "x": -0.0,
+        "y": -0.0,
+        "z": -1.0,
+        "probability": 0.12499999999999994,
+        "phase": 0.0
+      }
+    ]
+  },
+  "rx_default": {
+    "description": "RX with parameter omitted (backend default 0.785398163)",
+    "qubits": 1,
+    "gates": [
+      {
+        "type": "RX",
+        "qubit": 0,
+        "position": 0
+      }
+    ],
+    "expected_qsphere": [
+      {
+        "state": "0",
+        "x": 0.0,
+        "y": 0.0,
+        "z": 1.0,
+        "probability": 0.853553390733793,
+        "phase": 0.0
+      },
+      {
+        "state": "1",
+        "x": -0.0,
+        "y": -0.0,
+        "z": -1.0,
+        "probability": 0.14644660926620703,
+        "phase": -1.5707963267948966
+      }
+    ]
+  },
+  "global_phase": {
+    "description": "X q0, RZ(pi/3) q0, H q1: global phase on dominant amplitude removed",
+    "qubits": 2,
+    "gates": [
+      {
+        "type": "X",
+        "qubit": 0,
+        "position": 0
+      },
+      {
+        "type": "RZ",
+        "qubit": 0,
+        "parameter": 1.0471975511965976,
+        "position": 1
+      },
+      {
+        "type": "H",
+        "qubit": 1,
+        "position": 0
+      }
+    ],
+    "expected_qsphere": [
+      {
+        "state": "01",
+        "x": -1.0,
+        "y": 1.2246467991473532e-16,
+        "z": 0.0,
+        "probability": 0.4999999999999999,
+        "phase": -3.0564609729688115e-16
+      },
+      {
+        "state": "11",
+        "x": -0.0,
+        "y": -0.0,
+        "z": -1.0,
+        "probability": 0.4999999999999999,
+        "phase": -3.0564609729688115e-16
+      }
+    ]
+  }
+}

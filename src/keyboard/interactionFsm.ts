@@ -53,14 +53,14 @@ export function interactionFsm(
 
   if (action.type === 'CYCLE_GATE') {
     const currentGateType = state.type === 'placing' ? state.gateType : null;
-    const currentIndex = currentGateType
-      ? GATE_CYCLE_ORDER.indexOf(currentGateType)
-      : -1;
+    const currentIndex = currentGateType ? GATE_CYCLE_ORDER.indexOf(currentGateType) : -1;
     const len = GATE_CYCLE_ORDER.length;
     const nextIndex =
       currentIndex === -1
-        ? (action.direction === 1 ? 0 : len - 1)
-        : ((currentIndex + action.direction + len) % len);
+        ? action.direction === 1
+          ? 0
+          : len - 1
+        : (currentIndex + action.direction + len) % len;
     const gateType = GATE_CYCLE_ORDER[nextIndex];
     // Recurse with resolved SELECT_GATE
     return interactionFsm(state, cursor, { type: 'SELECT_GATE', gateType }, bounds);

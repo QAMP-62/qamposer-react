@@ -59,7 +59,9 @@ export type { Theme } from './context/ThemeContext';
 // =============================================================================
 export { qiskitAdapter } from './adapters/qiskit';
 export { noopAdapter } from './adapters/noop';
+export { localAdapter } from './adapters/local';
 export type { QiskitAdapterConfig } from './adapters/types';
+export type { LocalAdapterConfig } from './adapters/local';
 
 // =============================================================================
 // TYPES - Core type definitions

@@ -50,16 +50,16 @@ function App() {
 
 ### Full Version with Visualization (Qamposer)
 
-The full version includes visualization components (histograms, Q-sphere) that require simulation results, so a backend adapter is needed:
+The full version includes visualization components (histograms, Q-sphere) that require simulation results, so a simulation adapter is needed. The zero-dependency `localAdapter` runs ideal simulation entirely in the browser — no server required:
 
 ```tsx
 import { Qamposer } from '@qamposer/react/visualization';
-import { qiskitAdapter } from '@qamposer/react';
+import { localAdapter } from '@qamposer/react';
 
 function App() {
   return (
     <Qamposer
-      adapter={qiskitAdapter('http://localhost:8080')}
+      adapter={localAdapter()}
       defaultTheme="dark"
       showThemeToggle
     />
@@ -110,9 +110,42 @@ import { QamposerMicro } from '@qamposer/react';
 <QamposerMicro />;
 ```
 
+### Local Simulation (no backend)
+
+`localAdapter` runs ideal (noiseless) state-vector simulation entirely in the browser, with counts, seeded sampling, and Q-sphere data matching the backend's output format:
+
+```tsx
+import { QamposerMicro, localAdapter } from '@qamposer/react';
+
+// No backend required — instant ideal simulation
+<QamposerMicro adapter={localAdapter()} />;
+```
+
+Options:
+
+```tsx
+localAdapter({
+  name: 'Browser Simulator', // display name
+  maxQubits: 12, // reject wider circuits
+  qsphere: true, // emit Q-sphere points for ≤5 qubits
+});
+```
+
+It can also be combined with a backend adapter: the backend handles noisy fake devices via "Set up and run", while every circuit edit is simulated instantly in the browser:
+
+```tsx
+import { Qamposer } from '@qamposer/react/visualization';
+import { qiskitAdapter, localAdapter } from '@qamposer/react';
+
+<Qamposer
+  adapter={qiskitAdapter(BACKEND_URL)} // noisy fake devices, via "Set up and run"
+  realtimeAdapter={localAdapter()} // instant ideal results on every edit
+/>;
+```
+
 ### With Backend (Simulation)
 
-To enable quantum simulation, start the backend and pass the `qiskitAdapter`:
+Noisy fake-device simulation (and any future real-hardware path) requires the backend. Start it and pass the `qiskitAdapter`:
 
 Assuming localhost is used here, but please specify the actual deployment destination for the backend.
 
