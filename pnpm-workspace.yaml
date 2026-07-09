@@ -1,4 +1,0 @@
-allowBuilds:
-  '@parcel/watcher': false
-  es5-ext: false
-  esbuild: false
