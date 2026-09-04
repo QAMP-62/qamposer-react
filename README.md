@@ -2,6 +2,14 @@
   Qamposer
 </h1>
 
+<p align="center">
+  <a href="https://qisk.it/e"><img src="https://qisk.it/e-ebaeb5c2" alt="Qiskit Ecosystem" /></a>
+  <a href="https://www.npmjs.com/package/@qamposer/react"><img src="https://img.shields.io/npm/v/@qamposer/react" alt="npm version" /></a>
+  <a href="https://github.com/QAMP-62/qamposer-react/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/QAMP-62/qamposer-react/ci.yml?branch=main&label=CI" alt="CI" /></a>
+  <a href="https://bundlejs.com/?q=@qamposer/react"><img src="https://img.shields.io/bundlejs/size/@qamposer/react" alt="bundle size" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
+</p>
+
 Qamposer is a modular, open-source quantum composer that can be embedded into your applications and runs anywhere.
 
 ## Installation
