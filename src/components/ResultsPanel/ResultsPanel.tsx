@@ -1,6 +1,38 @@
+import { useRef } from 'react';
 import Plot from 'react-plotly.js';
 import { useQamposer } from '../../hooks/useQamposer';
+import { useThemeMode, type ThemeMode } from '../../hooks/useThemeMode';
 import './ResultsPanel.scss';
+
+// Plotly renders to a canvas, so the theme colors are values instead of CSS variables
+interface ChartPalette {
+  /** Titles, axis labels and ticks */
+  text: string;
+  /** Axis lines and grid */
+  grid: string;
+  /** Bars */
+  bar: string;
+  /** Mode bar icons */
+  modebar: string;
+  modebarActive: string;
+}
+
+const PALETTES: Record<ThemeMode, ChartPalette> = {
+  dark: {
+    text: 'rgba(244,244,244,0.88)',
+    grid: 'rgba(255,255,255,0.12)',
+    bar: '#4285f4',
+    modebar: 'rgba(244,244,244,0.55)',
+    modebarActive: '#4285f4',
+  },
+  light: {
+    text: 'rgba(22,22,22,0.88)',
+    grid: 'rgba(22,22,22,0.12)',
+    bar: '#0f62fe',
+    modebar: 'rgba(22,22,22,0.55)',
+    modebarActive: '#0f62fe',
+  },
+};
 
 export interface ResultsPanelProps {
   /** Additional CSS class */
@@ -10,9 +42,12 @@ export interface ResultsPanelProps {
 export function ResultsPanel({ className = '' }: ResultsPanelProps = {}) {
   const { result } = useQamposer();
 
+  const rootRef = useRef<HTMLDivElement>(null);
+  const palette = PALETTES[useThemeMode(rootRef)];
+
   if (!result) {
     return (
-      <div className={`results-panel results-panel--empty ${className}`.trim()}>
+      <div className={`results-panel results-panel--empty ${className}`.trim()} ref={rootRef}>
         <div className="results-panel__placeholder">
           <ChartIcon />
           <h3>No simulation results yet</h3>
@@ -42,7 +77,7 @@ export function ResultsPanel({ className = '' }: ResultsPanelProps = {}) {
   const barWidth = 0.6;
 
   return (
-    <div className={`results-panel ${className}`.trim()}>
+    <div className={`results-panel ${className}`.trim()} ref={rootRef}>
       <div className="results-panel__header">
         <h3>Simulation Results</h3>
         <div className="results-panel__stats">
@@ -63,7 +98,7 @@ export function ResultsPanel({ className = '' }: ResultsPanelProps = {}) {
                 type: 'bar',
                 width: barWidth,
                 marker: {
-                  color: '#4285F4',
+                  color: palette.bar,
                 },
               },
             ]}
@@ -76,11 +111,19 @@ export function ResultsPanel({ className = '' }: ResultsPanelProps = {}) {
                 tickvals: xPositions,
                 ticktext: allStates,
                 tickangle: -65,
+                color: palette.text,
+                gridcolor: palette.grid,
+                linecolor: palette.grid,
+                zerolinecolor: palette.grid,
               },
               yaxis: {
                 title: { text: 'Probabilities (%)' },
                 range: [0, 100],
                 dtick: 20,
+                color: palette.text,
+                gridcolor: palette.grid,
+                linecolor: palette.grid,
+                zerolinecolor: palette.grid,
               },
               margin: { t: 40, r: 20, b: 100, l: 60 },
               paper_bgcolor: 'transparent',
@@ -88,6 +131,12 @@ export function ResultsPanel({ className = '' }: ResultsPanelProps = {}) {
               font: {
                 family: 'IBM Plex Sans, sans-serif',
                 size: 12,
+                color: palette.text,
+              },
+              modebar: {
+                bgcolor: 'transparent',
+                color: palette.modebar,
+                activecolor: palette.modebarActive,
               },
             }}
             config={{

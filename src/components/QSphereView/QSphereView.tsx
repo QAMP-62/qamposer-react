@@ -1,13 +1,53 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Plot from 'react-plotly.js';
 import { useQamposer } from '../../hooks/useQamposer';
+import { useThemeMode, type ThemeMode } from '../../hooks/useThemeMode';
 import type { QSpherePoint } from '../../types';
 import './QSphereView.scss';
 
-// Color constants
-const BG = 'rgba(12,16,22,0.96)';
-const RING = 'rgba(255,255,255,0.35)';
-const SPOKE = 'rgba(80,140,255,0.55)';
+// Plotly renders to a canvas, so the theme colors are values instead of CSS variables
+interface QSpherePalette {
+  /** 3D scene backdrop */
+  background: string;
+  /** Equator / meridian rings */
+  ring: string;
+  /** Center-to-state radial lines */
+  spoke: string;
+  /** Sphere surface gradient (pole -> equator) */
+  surface: [number, string][];
+  surfaceOpacity: number;
+  /** Outline around the state markers */
+  markerOutline: string;
+  /** State / phase labels */
+  text: string;
+}
+
+const PALETTES: Record<ThemeMode, QSpherePalette> = {
+  dark: {
+    background: 'rgba(12,16,22,0.96)',
+    ring: 'rgba(255,255,255,0.35)',
+    spoke: 'rgba(80,140,255,0.55)',
+    surface: [
+      [0, 'rgba(44,78,120,0.45)'],
+      [1, 'rgba(18,28,44,0.55)'],
+    ],
+    surfaceOpacity: 0.32,
+    markerOutline: '#cfd8ff',
+    text: 'rgba(255,255,255,0.88)',
+  },
+  light: {
+    background: 'rgba(247,249,252,1)',
+    ring: 'rgba(38,50,76,0.45)',
+    spoke: 'rgba(15,98,254,0.5)',
+    surface: [
+      [0, 'rgba(96,140,205,0.5)'],
+      [1, 'rgba(188,206,234,0.6)'],
+    ],
+    surfaceOpacity: 0.45,
+    markerOutline: 'rgba(24,34,58,0.55)',
+    text: 'rgba(22,22,22,0.88)',
+  },
+};
 
 // Camera configuration
 interface CameraPosition {
@@ -133,6 +173,9 @@ export function QSphereView({ className = '' }: QSphereViewProps) {
   const { result } = useQamposer();
   const points = result?.qsphere;
 
+  const rootRef = useRef<HTMLDivElement>(null);
+  const palette = PALETTES[useThemeMode(rootRef)];
+
   const [showStateLabels, setShowStateLabels] = useState(true);
   const [showPhaseLabels, setShowPhaseLabels] = useState(false);
   const [camera, setCamera] = useState<CameraPosition>(DEFAULT_CAMERA);
@@ -151,7 +194,7 @@ export function QSphereView({ className = '' }: QSphereViewProps) {
 
   if (!points || points.length === 0) {
     return (
-      <div className={`qsphere-view ${className}`.trim()}>
+      <div className={`qsphere-view ${className}`.trim()} ref={rootRef}>
         <div className="qsphere-view__placeholder">
           <p>No Q-sphere data available (run a simulation with ≤ 5 qubits).</p>
         </div>
@@ -206,12 +249,9 @@ export function QSphereView({ className = '' }: QSphereViewProps) {
       z: sphereData.z,
       surfacecolor: sphereData.surfacecolor,
       showscale: false,
-      opacity: 0.32,
+      opacity: palette.surfaceOpacity,
       hoverinfo: 'skip' as const,
-      colorscale: [
-        [0, 'rgba(44,78,120,0.45)'],
-        [1, 'rgba(18,28,44,0.55)'],
-      ],
+      colorscale: palette.surface,
       contours: { x: { show: false }, y: { show: false }, z: { show: false } },
       lighting: { ambient: 0.9, diffuse: 0.45, specular: 0.1 },
       showlegend: false,
@@ -225,7 +265,7 @@ export function QSphereView({ className = '' }: QSphereViewProps) {
       x: radialData.x,
       y: radialData.y,
       z: radialData.z,
-      line: { color: SPOKE, width: 2 },
+      line: { color: palette.spoke, width: 2 },
       showlegend: false,
     },
 
@@ -237,7 +277,7 @@ export function QSphereView({ className = '' }: QSphereViewProps) {
       x: equatorRing.x,
       y: equatorRing.y,
       z: equatorRing.z,
-      line: { color: RING, width: 2 },
+      line: { color: palette.ring, width: 2 },
       showlegend: false,
     },
 
@@ -249,7 +289,7 @@ export function QSphereView({ className = '' }: QSphereViewProps) {
       x: meridianRing.x,
       y: meridianRing.y,
       z: meridianRing.z,
-      line: { color: RING, width: 1.5, dash: 'dot' },
+      line: { color: palette.ring, width: 1.5, dash: 'dot' },
       showlegend: false,
     },
 
@@ -264,7 +304,7 @@ export function QSphereView({ className = '' }: QSphereViewProps) {
       hoverinfo: 'text' as const,
       hovertext: hoverText,
       textposition: 'top center',
-      textfont: { color: '#ffffff', size: 12 },
+      textfont: { color: palette.text, size: 12 },
       marker: {
         size: sizes,
         color: phases,
@@ -272,7 +312,7 @@ export function QSphereView({ className = '' }: QSphereViewProps) {
         cmin: -Math.PI,
         cmax: Math.PI,
         opacity: 0.95,
-        line: { color: '#cfd8ff', width: 1.5 },
+        line: { color: palette.markerOutline, width: 1.5 },
       },
       showlegend: false,
     },
@@ -285,7 +325,7 @@ export function QSphereView({ className = '' }: QSphereViewProps) {
       yaxis: hiddenAxisStyle,
       zaxis: hiddenAxisStyle,
       aspectmode: 'cube' as const,
-      bgcolor: BG,
+      bgcolor: palette.background,
       camera,
     },
     margin: { l: 0, r: 0, t: 10, b: 0 },
@@ -294,7 +334,7 @@ export function QSphereView({ className = '' }: QSphereViewProps) {
     font: {
       family: 'IBM Plex Sans, sans-serif',
       size: 12,
-      color: 'rgba(255,255,255,0.85)',
+      color: palette.text,
     },
     showlegend: false,
   };
@@ -307,7 +347,7 @@ export function QSphereView({ className = '' }: QSphereViewProps) {
   };
 
   return (
-    <div className={`qsphere-view ${className}`.trim()}>
+    <div className={`qsphere-view ${className}`.trim()} ref={rootRef}>
       <div className="qsphere-view__controls">
         <div className="qsphere-view__toggles">
           <label className="qsphere-view__checkbox">
