@@ -719,7 +719,18 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
                 top: `${qubitIndex * QUBIT_HEIGHT + QUBIT_HEIGHT / 2}px`,
               }}
             >
-              <div className="circuit-editor__measurement-icon" />
+              <svg
+                className="circuit-editor__measurement-icon"
+                viewBox="0 0 32 32"
+                width="32"
+                height="32"
+                role="img"
+                aria-label={`Measure q[${qubitIndex}]`}
+              >
+                <path className="circuit-editor__measurement-dial" d="M8.5 20a7.5 7.5 0 0 1 15 0" />
+                <path className="circuit-editor__measurement-needle" d="M16 20 20.9 12.1" />
+                <circle className="circuit-editor__measurement-pivot" cx="16" cy="20" r="1.45" />
+              </svg>
             </div>
           ))}
         </div>
