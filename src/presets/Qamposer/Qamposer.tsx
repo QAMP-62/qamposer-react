@@ -1,5 +1,5 @@
-import { QamposerProvider } from '../../context/QamposerProvider';
-import { ThemeProvider, useTheme, type Theme } from '../../context/ThemeContext';
+import { useTheme, type Theme } from '../../context/ThemeContext';
+import { PresetProviders } from '../PresetProviders';
 import { Operations } from '../../components/Operations';
 import { CircuitEditor } from '../../components/CircuitEditor';
 import { ResultsPanel } from '../../components/ResultsPanel';
@@ -37,6 +37,9 @@ export interface QamposerProps extends Omit<QamposerProviderProps, 'children'> {
  * - Results panel (probability histogram)
  * - Q-sphere visualization
  * - Code editor (OpenQASM)
+ *
+ * When rendered inside a <QamposerProvider>, it uses that provider's state
+ * (so sibling components can call useQamposer()) and ignores provider props.
  */
 export function Qamposer({
   className = '',
@@ -50,19 +53,21 @@ export function Qamposer({
   ...providerProps
 }: QamposerProps) {
   return (
-    <ThemeProvider defaultTheme={defaultTheme}>
-      <QamposerProvider {...providerProps}>
-        <QamposerContent
-          className={className}
-          showHeader={showHeader}
-          title={title}
-          codeEditorWidth={codeEditorWidth}
-          topGridTemplate={topGridTemplate}
-          bottomGridTemplate={bottomGridTemplate}
-          showThemeToggle={showThemeToggle}
-        />
-      </QamposerProvider>
-    </ThemeProvider>
+    <PresetProviders
+      presetName="Qamposer"
+      defaultTheme={defaultTheme}
+      providerProps={providerProps}
+    >
+      <QamposerContent
+        className={className}
+        showHeader={showHeader}
+        title={title}
+        codeEditorWidth={codeEditorWidth}
+        topGridTemplate={topGridTemplate}
+        bottomGridTemplate={bottomGridTemplate}
+        showThemeToggle={showThemeToggle}
+      />
+    </PresetProviders>
   );
 }
 

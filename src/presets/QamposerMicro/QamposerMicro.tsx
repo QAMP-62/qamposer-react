@@ -1,5 +1,5 @@
-import { QamposerProvider } from '../../context/QamposerProvider';
-import { ThemeProvider, useTheme, type Theme } from '../../context/ThemeContext';
+import { useTheme, type Theme } from '../../context/ThemeContext';
+import { PresetProviders } from '../PresetProviders';
 import { Operations } from '../../components/Operations';
 import { CircuitEditor } from '../../components/CircuitEditor';
 import { SimulationControls } from '../../components/SimulationControls';
@@ -31,6 +31,9 @@ export interface QamposerMicroProps extends Omit<QamposerProviderProps, 'childre
  *
  * Ideal for embedding in games, educational apps, or space-constrained layouts.
  * Exposes the same data callbacks as the full Qamposer component.
+ *
+ * When rendered inside a <QamposerProvider>, it uses that provider's state
+ * (so sibling components can call useQamposer()) and ignores provider props.
  */
 export function QamposerMicro({
   className = '',
@@ -42,17 +45,19 @@ export function QamposerMicro({
   ...providerProps
 }: QamposerMicroProps) {
   return (
-    <ThemeProvider defaultTheme={defaultTheme}>
-      <QamposerProvider {...providerProps}>
-        <QamposerMicroContent
-          className={className}
-          showHeader={showHeader}
-          title={title}
-          gridTemplate={gridTemplate}
-          showThemeToggle={showThemeToggle}
-        />
-      </QamposerProvider>
-    </ThemeProvider>
+    <PresetProviders
+      presetName="QamposerMicro"
+      defaultTheme={defaultTheme}
+      providerProps={providerProps}
+    >
+      <QamposerMicroContent
+        className={className}
+        showHeader={showHeader}
+        title={title}
+        gridTemplate={gridTemplate}
+        showThemeToggle={showThemeToggle}
+      />
+    </PresetProviders>
   );
 }
 

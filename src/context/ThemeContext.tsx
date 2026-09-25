@@ -89,6 +89,11 @@ export function ThemeProvider({ children, defaultTheme = 'dark' }: ThemeProvider
   );
 }
 
+/** Returns the theme context, or null when there is no ThemeProvider above */
+export function useOptionalTheme(): ThemeContextValue | null {
+  return useContext(ThemeContext);
+}
+
 export function useTheme(): ThemeContextValue {
   const context = useContext(ThemeContext);
   if (!context) {

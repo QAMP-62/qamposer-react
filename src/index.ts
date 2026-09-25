@@ -77,6 +77,9 @@ export type {
   // Simulation types
   SimulationResult,
   SimulationCompleteEvent,
+  SimulationStartEvent,
+  SimulationErrorEvent,
+  SimulationSource,
   QSpherePoint,
   SimulationAdapter,
   // Provider types

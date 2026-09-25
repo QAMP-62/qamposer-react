@@ -1,4 +1,12 @@
-import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  type RefObject,
+} from 'react';
 import { QamposerContext } from './QamposerContext';
 import { circuitToQasm, qasmToCircuit, generateGateId, compactGates } from '../utils/openqasm';
 import { noopAdapter } from '../adapters/noop';
@@ -6,14 +14,16 @@ import type {
   Circuit,
   Gate,
   SimulationResult,
-  SimulationCompleteEvent,
   SimulationStatus,
-  SimulationAdapter,
   SimulationProfile,
+  SimulationSource,
   QamposerConfig,
   QamposerContextValue,
+  QamposerProviderProps,
   QasmParseResult,
 } from '../types';
+
+export type { QamposerProviderProps } from '../types';
 
 const DEFAULT_CONFIG: Required<QamposerConfig> = {
   maxQubits: 5,
@@ -26,28 +36,18 @@ const DEFAULT_CIRCUIT: Circuit = {
   gates: [],
 };
 
-export interface QamposerProviderProps {
-  /** Controlled mode: external circuit state */
-  circuit?: Circuit;
-  /** Controlled mode: callback when circuit changes */
-  onCircuitChange?: (circuit: Circuit) => void;
-  /** Uncontrolled mode: initial circuit */
-  defaultCircuit?: Circuit;
-  /** Simulation adapter for backend communication (used by "Set up and run") */
-  adapter?: SimulationAdapter;
-  /**
-   * Adapter for real-time ideal simulation on circuit changes.
-   * If provided, auto-simulation uses this adapter instead of the main adapter.
-   * This allows using a client-side simulator for instant results
-   * while keeping the main adapter for noisy/real backend simulations.
-   * If not provided, auto-simulation uses the main adapter.
-   */
-  realtimeAdapter?: SimulationAdapter;
-  /** Callback when simulation completes (includes circuit info) */
-  onSimulationComplete?: (event: SimulationCompleteEvent) => void;
-  /** Configuration options */
-  config?: QamposerConfig;
-  children: ReactNode;
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+/**
+ * Keeps the latest value in a ref so callbacks and adapters passed inline
+ * (new identity on every parent render) don't re-trigger effects.
+ */
+function useLatestRef<T>(value: T): RefObject<T> {
+  const ref = useRef(value);
+  useIsomorphicLayoutEffect(() => {
+    ref.current = value;
+  });
+  return ref;
 }
 
 export function QamposerProvider({
@@ -56,11 +56,32 @@ export function QamposerProvider({
   defaultCircuit = DEFAULT_CIRCUIT,
   adapter = noopAdapter,
   realtimeAdapter,
+  onSimulationStart,
   onSimulationComplete,
+  onSimulationError,
   config: userConfig,
   children,
 }: QamposerProviderProps) {
-  const config = useMemo(() => ({ ...DEFAULT_CONFIG, ...userConfig }), [userConfig]);
+  const maxQubits = userConfig?.maxQubits ?? DEFAULT_CONFIG.maxQubits;
+  const maxGates = userConfig?.maxGates ?? DEFAULT_CONFIG.maxGates;
+  const maxShots = userConfig?.maxShots ?? DEFAULT_CONFIG.maxShots;
+  const config = useMemo(
+    () => ({ maxQubits, maxGates, maxShots }),
+    [maxQubits, maxGates, maxShots]
+  );
+
+  // Callbacks and adapters are read through refs so that inline props
+  // (arrow functions, `adapter={localAdapter()}`) never cause re-simulation loops.
+  const callbacksRef = useLatestRef({
+    onCircuitChange,
+    onSimulationStart,
+    onSimulationComplete,
+    onSimulationError,
+  });
+  const adapterRef = useLatestRef(adapter);
+  // Auto-simulation uses realtimeAdapter if provided, otherwise the main adapter
+  const resolvedRealtimeAdapter = realtimeAdapter ?? adapter;
+  const realtimeAdapterRef = useLatestRef(resolvedRealtimeAdapter);
 
   // Determine if we're in controlled mode
   const isControlled = controlledCircuit !== undefined;
@@ -71,22 +92,33 @@ export function QamposerProvider({
   // Use controlled or internal circuit
   const circuit = isControlled ? controlledCircuit : internalCircuit;
 
+  // Latest circuit, updated synchronously by updateCircuit so that actions called
+  // back-to-back in one handler (e.g. importQasm() then simulate()) see each other's changes.
+  const circuitRef = useRef(circuit);
+  useIsomorphicLayoutEffect(() => {
+    circuitRef.current = circuit;
+  });
+
   // Helper to update circuit (handles both controlled and uncontrolled modes)
   const updateCircuit = useCallback(
     (newCircuit: Circuit) => {
-      if (isControlled) {
-        onCircuitChange?.(newCircuit);
-      } else {
+      circuitRef.current = newCircuit;
+      if (!isControlled) {
         setInternalCircuit(newCircuit);
-        // Also call onCircuitChange in uncontrolled mode for external listeners
-        onCircuitChange?.(newCircuit);
       }
+      // In uncontrolled mode this notifies external listeners
+      callbacksRef.current.onCircuitChange?.(newCircuit);
     },
-    [isControlled, onCircuitChange]
+    [isControlled, callbacksRef]
   );
 
   // Simulation state
-  const [result, setResult] = useState<SimulationResult | null>(null);
+  const [resultState, setResultState] = useState<{
+    result: SimulationResult | null;
+    source: SimulationSource | null;
+  }>({ result: null, source: null });
+  const { result, source: resultSource } = resultState;
+  const clearResult = useCallback(() => setResultState({ result: null, source: null }), []);
   const [status, setStatus] = useState<SimulationStatus>('idle');
   const [error, setError] = useState<Error | null>(null);
 
@@ -128,66 +160,123 @@ export function QamposerProvider({
     [updateCircuit]
   );
 
-  // Check if adapter is available
+  // Check if adapter is available.
+  // Availability is re-checked when the adapter identity changes, but simulation
+  // only re-runs when availability actually flips (setState bails out on equal values).
   const [canSimulate, setCanSimulate] = useState(false);
   useEffect(() => {
-    adapter.isAvailable().then(setCanSimulate);
+    let cancelled = false;
+    adapter.isAvailable().then((available) => {
+      if (!cancelled) setCanSimulate(available);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [adapter]);
-
-  // Auto-simulation: run ideal simulator whenever circuit changes
-  // Uses realtimeAdapter if provided, otherwise falls back to the main adapter
-  const resolvedRealtimeAdapter = realtimeAdapter ?? adapter;
 
   const [canAutoSimulate, setCanAutoSimulate] = useState(false);
   useEffect(() => {
-    resolvedRealtimeAdapter.isAvailable().then(setCanAutoSimulate);
+    let cancelled = false;
+    resolvedRealtimeAdapter.isAvailable().then((available) => {
+      if (!cancelled) setCanAutoSimulate(available);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [resolvedRealtimeAdapter]);
 
+  // Runs one simulation and reports its lifecycle through state and callbacks.
+  // Returns null when a newer simulation has superseded this one.
+  const runSimulation = useCallback(
+    async (
+      source: SimulationSource,
+      simCircuit: Circuit,
+      shots: number,
+      profile: SimulationProfile | undefined,
+      isCurrent: () => boolean
+    ): Promise<SimulationResult | null> => {
+      const qasm = circuitToQasm(simCircuit);
+      const simAdapter = source === 'realtime' ? realtimeAdapterRef.current : adapterRef.current;
+
+      setStatus('simulating');
+      setError(null);
+      callbacksRef.current.onSimulationStart?.({ circuit: { ...simCircuit }, qasm, source });
+
+      try {
+        const simulationResult = await simAdapter.simulate({
+          qubits: simCircuit.qubits,
+          gates: simCircuit.gates.map(({ id: _, ...gate }) => gate),
+          shots,
+          profile,
+        });
+        if (!isCurrent()) return null;
+        setResultState({ result: simulationResult, source });
+        setStatus('idle');
+        callbacksRef.current.onSimulationComplete?.({
+          result: simulationResult,
+          circuit: { ...simCircuit },
+          qasm,
+          source,
+        });
+        return simulationResult;
+      } catch (err) {
+        const simulationError = err instanceof Error ? err : new Error(String(err));
+        if (!isCurrent()) return null;
+        setError(simulationError);
+        setStatus('error');
+        callbacksRef.current.onSimulationError?.({
+          error: simulationError,
+          circuit: { ...simCircuit },
+          qasm,
+          source,
+        });
+        throw simulationError;
+      }
+    },
+    [adapterRef, realtimeAdapterRef, callbacksRef]
+  );
+
+  // Auto-simulation: run ideal simulator whenever circuit changes
   const autoSimRequestId = useRef(0);
+  // Circuit most recently passed to simulate(); its realtime result must not
+  // overwrite the explicit run (e.g. importQasm() followed by simulate()).
+  const lastRunCircuit = useRef<Circuit | null>(null);
 
   useEffect(() => {
     if (!canAutoSimulate || circuit.gates.length === 0) {
       if (circuit.gates.length === 0) {
-        setResult(null);
+        clearResult();
       }
       return;
     }
+    if (circuit === lastRunCircuit.current) return;
 
     const requestId = ++autoSimRequestId.current;
 
-    setStatus('simulating');
-    setError(null);
-
-    const request = {
-      qubits: circuit.qubits,
-      gates: circuit.gates.map(({ id: _, ...gate }) => gate),
-      shots: 1024,
-      profile: { type: 'ideal' as const },
-    };
-
-    resolvedRealtimeAdapter
-      .simulate(request)
-      .then((simulationResult) => {
-        if (autoSimRequestId.current !== requestId) return;
-        setResult(simulationResult);
-        setStatus('idle');
-        onSimulationComplete?.({
-          result: simulationResult,
-          circuit: { ...circuit },
-          qasm: circuitToQasm(circuit),
-        });
-      })
-      .catch((err) => {
-        if (autoSimRequestId.current !== requestId) return;
-        setError(err instanceof Error ? err : new Error(String(err)));
-        setStatus('error');
-      });
-  }, [circuit, canAutoSimulate, resolvedRealtimeAdapter, onSimulationComplete]);
+    runSimulation(
+      'realtime',
+      circuit,
+      1024,
+      { type: 'ideal' },
+      () => autoSimRequestId.current === requestId
+    ).catch(() => {
+      // Already reported via state and onSimulationError
+    });
+  }, [circuit, canAutoSimulate, runSimulation, clearResult]);
 
   // === Circuit Actions ===
 
+  const setCircuit = useCallback(
+    (newCircuit: Circuit) => {
+      updateCircuit(newCircuit);
+      setEditingGate(null);
+    },
+    [updateCircuit]
+  );
+
   const addGate = useCallback(
     (gate: Omit<Gate, 'id'>) => {
+      const circuit = circuitRef.current;
       if (circuit.gates.length >= config.maxGates) {
         console.warn(`Maximum gate limit (${config.maxGates}) reached`);
         return;
@@ -201,11 +290,12 @@ export function QamposerProvider({
         gates: [...circuit.gates, newGate],
       });
     },
-    [circuit, config.maxGates, updateCircuit]
+    [config.maxGates, updateCircuit]
   );
 
   const removeGate = useCallback(
     (id: string) => {
+      const circuit = circuitRef.current;
       updateCircuit({
         ...circuit,
         gates: circuit.gates.filter((g) => g.id !== id),
@@ -215,11 +305,12 @@ export function QamposerProvider({
         setEditingGate(null);
       }
     },
-    [circuit, editingGate, updateCircuit]
+    [editingGate, updateCircuit]
   );
 
   const updateGate = useCallback(
     (id: string, updates: Partial<Gate>) => {
+      const circuit = circuitRef.current;
       const targetGate = circuit.gates.find((g) => g.id === id);
       if (!targetGate) return;
 
@@ -283,41 +374,45 @@ export function QamposerProvider({
         setEditingGate({ ...editingGate, ...updates });
       }
     },
-    [circuit, editingGate, updateCircuit]
+    [editingGate, updateCircuit]
   );
 
   const updateGates = useCallback(
     (gates: Gate[]) => {
+      const circuit = circuitRef.current;
       updateCircuit({
         ...circuit,
         gates,
       });
     },
-    [circuit, updateCircuit]
+    [updateCircuit]
   );
 
   const setQubits = useCallback(
     (count: number) => {
+      const circuit = circuitRef.current;
       const newCount = Math.min(Math.max(1, count), config.maxQubits);
       updateCircuit({
         ...circuit,
         qubits: newCount,
       });
     },
-    [circuit, config.maxQubits, updateCircuit]
+    [config.maxQubits, updateCircuit]
   );
 
   const addQubit = useCallback(() => {
+    const circuit = circuitRef.current;
     if (circuit.qubits < config.maxQubits) {
       updateCircuit({
         ...circuit,
         qubits: circuit.qubits + 1,
       });
     }
-  }, [circuit, config.maxQubits, updateCircuit]);
+  }, [config.maxQubits, updateCircuit]);
 
   const removeQubit = useCallback(
     (qubitIndex?: number) => {
+      const circuit = circuitRef.current;
       if (circuit.qubits <= 1) {
         return;
       }
@@ -364,19 +459,20 @@ export function QamposerProvider({
         qubits: circuit.qubits - 1,
         gates: compactedGates,
       });
-      setResult(null);
+      clearResult();
     },
-    [circuit, updateCircuit]
+    [updateCircuit, clearResult]
   );
 
   const clearCircuit = useCallback(() => {
+    const circuit = circuitRef.current;
     updateCircuit({
       qubits: circuit.qubits,
       gates: [],
     });
-    setResult(null);
+    clearResult();
     setEditingGate(null);
-  }, [circuit.qubits, updateCircuit]);
+  }, [updateCircuit, clearResult]);
 
   // === QASM Actions ===
 
@@ -402,13 +498,15 @@ export function QamposerProvider({
   );
 
   const exportQasm = useCallback(() => {
+    const circuit = circuitRef.current;
     return circuitToQasm(circuit);
-  }, [circuit]);
+  }, []);
 
   // === Simulation ===
 
   const simulate = useCallback(
     async (shots: number = 1024, profile?: SimulationProfile): Promise<SimulationResult> => {
+      const circuit = circuitRef.current;
       // Invalidate any in-flight auto-simulation
       autoSimRequestId.current++;
 
@@ -422,37 +520,13 @@ export function QamposerProvider({
 
       const validShots = Math.min(Math.max(1, shots), config.maxShots);
 
-      setStatus('simulating');
-      setError(null);
+      lastRunCircuit.current = circuit;
 
-      try {
-        const request = {
-          qubits: circuit.qubits,
-          gates: circuit.gates.map(({ id: _, ...gate }) => gate),
-          shots: validShots,
-          profile,
-        };
-
-        const simulationResult = await adapter.simulate(request);
-        setResult(simulationResult);
-        setStatus('idle');
-
-        // Create event with circuit info
-        const event: SimulationCompleteEvent = {
-          result: simulationResult,
-          circuit: { ...circuit },
-          qasm: circuitToQasm(circuit),
-        };
-        onSimulationComplete?.(event);
-        return simulationResult;
-      } catch (err) {
-        const simulationError = err instanceof Error ? err : new Error(String(err));
-        setError(simulationError);
-        setStatus('error');
-        throw simulationError;
-      }
+      // Explicit runs are never superseded, so the result is always non-null
+      const simulationResult = await runSimulation('run', circuit, validShots, profile, () => true);
+      return simulationResult as SimulationResult;
     },
-    [adapter, canSimulate, circuit, config.maxShots, onSimulationComplete]
+    [canSimulate, config.maxShots, runSimulation]
   );
 
   // === Context Value ===
@@ -462,6 +536,7 @@ export function QamposerProvider({
       // State
       circuit,
       result,
+      resultSource,
       status,
       error,
       qasmCode,
@@ -469,6 +544,7 @@ export function QamposerProvider({
       editingGate,
 
       // Circuit Actions
+      setCircuit,
       addGate,
       removeGate,
       updateGate,
@@ -499,11 +575,13 @@ export function QamposerProvider({
     [
       circuit,
       result,
+      resultSource,
       status,
       error,
       qasmCode,
       parseError,
       editingGate,
+      setCircuit,
       addGate,
       removeGate,
       updateGate,

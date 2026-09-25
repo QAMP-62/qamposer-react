@@ -87,6 +87,25 @@ export interface SimulationResult {
 }
 
 /**
+ * What triggered a simulation
+ * - 'realtime': automatic ideal simulation on circuit change (realtimeAdapter)
+ * - 'run': explicit simulate() call, e.g. "Set up and run" (adapter)
+ */
+export type SimulationSource = 'realtime' | 'run';
+
+/**
+ * Event passed to onSimulationStart callback
+ */
+export interface SimulationStartEvent {
+  /** Circuit being simulated */
+  circuit: Circuit;
+  /** OpenQASM 2.0 representation of the circuit */
+  qasm: string;
+  /** What triggered the simulation */
+  source: SimulationSource;
+}
+
+/**
  * Event passed to onSimulationComplete callback
  * Contains simulation result along with circuit information
  */
@@ -97,6 +116,22 @@ export interface SimulationCompleteEvent {
   circuit: Circuit;
   /** OpenQASM 2.0 representation of the circuit */
   qasm: string;
+  /** What triggered the simulation */
+  source: SimulationSource;
+}
+
+/**
+ * Event passed to onSimulationError callback
+ */
+export interface SimulationErrorEvent {
+  /** Error thrown by the adapter */
+  error: Error;
+  /** Circuit that was simulated */
+  circuit: Circuit;
+  /** OpenQASM 2.0 representation of the circuit */
+  qasm: string;
+  /** What triggered the simulation */
+  source: SimulationSource;
 }
 
 // ============================================================================
@@ -131,8 +166,12 @@ export interface QamposerProviderProps {
    * If not provided, auto-simulation uses the main adapter.
    */
   realtimeAdapter?: SimulationAdapter;
+  /** Callback when a simulation starts */
+  onSimulationStart?: (event: SimulationStartEvent) => void;
   /** Callback when simulation completes (includes circuit info) */
   onSimulationComplete?: (event: SimulationCompleteEvent) => void;
+  /** Callback when a simulation fails */
+  onSimulationError?: (event: SimulationErrorEvent) => void;
   /** Configuration options */
   config?: QamposerConfig;
   children: React.ReactNode;
@@ -161,6 +200,8 @@ export interface QamposerContextValue {
   // State
   circuit: Circuit;
   result: SimulationResult | null;
+  /** What produced `result` (null when there is no result) */
+  resultSource: SimulationSource | null;
   status: SimulationStatus;
   error: Error | null;
   qasmCode: string;
@@ -168,6 +209,8 @@ export interface QamposerContextValue {
   editingGate: Gate | null;
 
   // Circuit Actions
+  /** Replace the whole circuit */
+  setCircuit: (circuit: Circuit) => void;
   addGate: (gate: Omit<Gate, 'id'>) => void;
   removeGate: (id: string) => void;
   updateGate: (id: string, updates: Partial<Gate>) => void;

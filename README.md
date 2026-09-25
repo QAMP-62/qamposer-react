@@ -189,7 +189,10 @@ interface QamposerProps {
 
   // Simulation
   adapter?: SimulationAdapter; // Backend adapter (default: noopAdapter)
+  realtimeAdapter?: SimulationAdapter; // Auto-simulation on edit (default: adapter)
+  onSimulationStart?: (event: SimulationStartEvent) => void;
   onSimulationComplete?: (event: SimulationCompleteEvent) => void;
+  onSimulationError?: (event: SimulationErrorEvent) => void;
 
   // Configuration
   config?: QamposerConfig;
@@ -217,6 +220,63 @@ interface QamposerConfig {
   maxShots?: number; // Default: 10000
 }
 ```
+
+### Simulation Events
+
+Every simulation event carries `circuit`, `qasm`, and `source`: `'realtime'` for the automatic simulation on each edit, `'run'` for an explicit `simulate()` call (e.g. "Set up and run").
+
+```tsx
+<QamposerMicro
+  adapter={localAdapter()}
+  onSimulationStart={({ source }) => setLoading(true)}
+  onSimulationComplete={({ result, source }) => source === 'run' && save(result)}
+  onSimulationError={({ error }) => showToast(error.message)}
+/>
+```
+
+Callbacks and adapters can be passed inline: the provider always calls the latest callback without re-running the simulation. Creating an adapter inline still re-checks `isAvailable()` on every parent render, so for network adapters prefer creating them once outside the component (or with `useMemo`).
+
+### Controlling a Preset from Your App
+
+Wrap a preset in your own `QamposerProvider` and use `useQamposer()` anywhere inside it. The preset uses the outer provider instead of creating its own, so your components share its state (`circuit`, `result`, `resultSource`, `status`, `error`) and actions (`setCircuit`, `importQasm`, `simulate`, `clearCircuit`, `addGate`, ...).
+
+```tsx
+import { QamposerProvider, QamposerMicro, useQamposer, localAdapter } from '@qamposer/react';
+
+const adapter = localAdapter();
+
+function Toolbar() {
+  const { result, resultSource, setCircuit, importQasm, simulate } = useQamposer();
+  return (
+    <>
+      <button onClick={() => setCircuit(PUZZLE_CIRCUIT)}>Load puzzle</button>
+      {/* Actions see each other's changes, so this measures the imported circuit */}
+      <button
+        onClick={() => {
+          importQasm(PUZZLE_QASM);
+          simulate(1024);
+        }}
+      >
+        Load & measure
+      </button>
+      <button onClick={() => simulate(1024)}>Measure</button>
+      {/* resultSource: 'realtime' (auto-simulation on edit) or 'run' (simulate()) */}
+      {result && resultSource === 'run' && <pre>{JSON.stringify(result.counts)}</pre>}
+    </>
+  );
+}
+
+function App() {
+  return (
+    <QamposerProvider adapter={adapter} onSimulationComplete={console.log}>
+      <QamposerMicro />
+      <Toolbar />
+    </QamposerProvider>
+  );
+}
+```
+
+When a preset is inside a `QamposerProvider`, pass provider props (`adapter`, `circuit`, `onSimulationComplete`, ...) to the provider; the same props on the preset are ignored with a console warning. An outer `ThemeProvider` is reused in the same way.
 
 <!-- ### Adapters
 
