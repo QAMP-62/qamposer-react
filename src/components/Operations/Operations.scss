@@ -88,6 +88,10 @@
     cursor: grab;
     transition: all 0.2s;
     user-select: none;
+    // Touch drags start on long-press; a quick swipe still scrolls the palette
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 
     &:hover {
       transform: scale(1.05);

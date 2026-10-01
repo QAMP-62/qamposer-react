@@ -50,9 +50,12 @@ export function SimulationControls({
   buttonLabel = 'Set up and run',
   className = '',
 }: SimulationControlsProps) {
-  const { simulate, status, circuit, adapter, canSimulate } = useQamposer();
+  const { simulate, status, circuit, adapter, adapterStatus } = useQamposer();
   const isSimulating = status === 'simulating';
+  const isConnecting = adapterStatus === 'checking';
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  // Message of the last failed run, shown instead of failing silently
+  const [runError, setRunError] = useState<string | null>(null);
   const [shots, setShots] = useState(1024);
 
   // Backend selection state
@@ -85,13 +88,31 @@ export function SimulationControls({
             setSelectedBackendId(fakeBackends[0].id);
           }
 
-          if (fakeBackends.length === 0 && !canSimulate) {
+          if (fakeBackends.length === 0 && adapterStatus === 'unavailable') {
             setBackendError(true);
           }
         })
+        .catch(() => setBackendError(true))
         .finally(() => setIsLoadingBackends(false));
     }
-  }, [isDialogOpen, adapter, canSimulate]);
+  }, [isDialogOpen, adapter, adapterStatus]);
+
+  const openDialog = () => {
+    setRunError(null);
+    setIsDialogOpen(true);
+  };
+
+  /** Run and report failures in the UI (never leave the rejection unhandled) */
+  const runAndReport = async (profile?: SimulationProfile): Promise<boolean> => {
+    setRunError(null);
+    try {
+      await simulate(shots, profile);
+      return true;
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : String(err));
+      return false;
+    }
+  };
 
   const selectedBackend = backends.find((b) => b.id === selectedBackendId);
 
@@ -108,9 +129,9 @@ export function SimulationControls({
       return;
     }
 
-    const profile = buildProfile();
-    await simulate(shots, profile);
-    setIsDialogOpen(false);
+    if (await runAndReport(buildProfile())) {
+      setIsDialogOpen(false);
+    }
   };
 
   const handleQuickRun = async () => {
@@ -118,7 +139,7 @@ export function SimulationControls({
       alert('Please add gates to the circuit before running simulation');
       return;
     }
-    await simulate(shots);
+    await runAndReport();
   };
 
   if (buttonOnly) {
@@ -127,9 +148,11 @@ export function SimulationControls({
         className={`simulation-controls__run-btn simulation-controls__run-btn--primary ${className}`.trim()}
         onClick={handleQuickRun}
         disabled={isSimulating}
+        title={runError ?? undefined}
+        aria-invalid={runError ? true : undefined}
       >
         {isSimulating ? <LoadingSpinner /> : <PlayIcon />}
-        <span>{isSimulating ? 'Running...' : 'Run'}</span>
+        <span>{isSimulating ? 'Running...' : runError ? 'Retry' : 'Run'}</span>
       </button>
     );
   }
@@ -138,7 +161,7 @@ export function SimulationControls({
     <>
       <button
         className={`simulation-controls__run-btn simulation-controls__run-btn--primary ${className}`.trim()}
-        onClick={() => setIsDialogOpen(true)}
+        onClick={openDialog}
         disabled={isSimulating}
       >
         <PlayIcon />
@@ -237,6 +260,19 @@ export function SimulationControls({
                   </div>
                 )}
               </div>
+
+              {runError && (
+                <div
+                  className="simulation-controls__error simulation-controls__run-error"
+                  role="alert"
+                >
+                  <span className="simulation-controls__error-icon">!</span>
+                  <div className="simulation-controls__error-content">
+                    <p className="simulation-controls__error-title">Run failed</p>
+                    <p className="simulation-controls__error-desc">{runError}</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="simulation-controls__dialog-footer">
@@ -250,12 +286,12 @@ export function SimulationControls({
               <button
                 className="simulation-controls__btn simulation-controls__btn--primary"
                 onClick={handleRun}
-                disabled={isSimulating || backendError}
+                disabled={isSimulating || isConnecting || backendError}
               >
-                {isSimulating ? (
+                {isSimulating || isConnecting ? (
                   <>
                     <LoadingSpinner />
-                    <span>Running...</span>
+                    <span>{isSimulating ? 'Running...' : 'Connecting...'}</span>
                   </>
                 ) : (
                   'Run circuit'

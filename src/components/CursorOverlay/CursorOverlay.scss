@@ -20,6 +20,12 @@
     background: rgba(66, 133, 244, 0.1);
   }
 
+  // Carrying a placed gate: the drop preview shows where it will land
+  &--moving &__frame {
+    border-style: dashed;
+    background: rgba(66, 133, 244, 0.15);
+  }
+
   &--cnot-control &__frame,
   &--cnot-target &__frame {
     border-color: #002d9c;

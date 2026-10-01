@@ -2,9 +2,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { interactionFsm } from '../keyboard/interactionFsm';
 import { useInputSource } from './useInputSource';
 import { useKeyRepeat } from './useKeyRepeat';
-import { useUndoRedo } from './useUndoRedo';
-import { compactGates, generateGateId } from '../utils/openqasm';
-import type { Circuit, Gate } from '../types';
+import { useQamposer } from './useQamposer';
+import { findGateAt, getGateRow } from '../circuit/operations';
 import type {
   CursorPosition,
   InteractionState,
@@ -14,8 +13,6 @@ import type {
 } from '../keyboard/types';
 
 export interface UseCircuitKeyboardOptions {
-  circuit: Circuit;
-  updateGates: (gates: Gate[]) => void;
   containerRef: React.RefObject<HTMLDivElement | null>;
   numPositions: number;
   columnLeftXs?: Record<number, number>;
@@ -27,13 +24,9 @@ export interface UseCircuitKeyboardResult {
   cursor: CursorPosition;
   interactionState: InteractionState;
   inputSource: InputSource;
-  canUndo: boolean;
-  canRedo: boolean;
 }
 
 export function useCircuitKeyboard({
-  circuit,
-  updateGates,
   containerRef,
   numPositions,
   columnLeftXs,
@@ -43,8 +36,8 @@ export function useCircuitKeyboard({
   const [cursor, setCursor] = useState<CursorPosition>({ row: 0, col: 0 });
   const [interactionState, setInteractionState] = useState<InteractionState>({ type: 'idle' });
 
+  const { circuit, insertGate, removeGate, moveGate, undo, redo } = useQamposer();
   const inputSource = useInputSource(containerRef);
-  const { pushState, undo, redo, canUndo, canRedo } = useUndoRedo(circuit.gates, updateGates);
 
   // Refs for latest values — synced in effects, read only in event handlers
   const circuitRef = useRef(circuit);
@@ -81,85 +74,52 @@ export function useCircuitKeyboard({
     }));
   }, [circuit.qubits, numPositions]);
 
-  // Execute a circuit command
+  // Execute a circuit command through the provider (recorded in its undo history)
   const executeCommand = useCallback(
     (command: CircuitCommand) => {
-      const { gates } = circuitRef.current;
+      const options = { origin: 'keyboard' as const };
 
       switch (command.type) {
-        case 'PLACE_GATE': {
-          const newGate: Gate = {
-            id: generateGateId(),
-            type: command.gateType,
-            qubit: command.row,
-            position: command.col,
-            ...(command.parameter !== undefined ? { parameter: command.parameter } : {}),
-          };
-
-          const shifted = gates.map((g) => {
-            if (g.qubit === command.row && g.position >= command.col) {
-              return { ...g, position: g.position + 1 };
-            }
-            if (
-              g.type === 'CNOT' &&
-              g.control !== undefined &&
-              g.target !== undefined &&
-              g.position >= command.col
-            ) {
-              const minQ = Math.min(g.control, g.target);
-              const maxQ = Math.max(g.control, g.target);
-              if (command.row >= minQ && command.row <= maxQ) {
-                return { ...g, position: g.position + 1 };
-              }
-            }
-            return g;
-          });
-
-          pushState(compactGates([...shifted, newGate]));
+        case 'PLACE_GATE':
+          insertGate(
+            {
+              type: command.gateType,
+              qubit: command.row,
+              ...(command.parameter !== undefined ? { parameter: command.parameter } : {}),
+            },
+            command.col,
+            options
+          );
           break;
-        }
 
-        case 'PLACE_CNOT': {
-          const newGate: Gate = {
-            id: generateGateId(),
-            type: 'CNOT',
-            control: command.controlRow,
-            target: command.targetRow,
-            position: command.col,
-          };
-
-          const minQ = Math.min(command.controlRow, command.targetRow);
-          const maxQ = Math.max(command.controlRow, command.targetRow);
-
-          const shifted = gates.map((g) => {
-            if (g.position < command.col) return g;
-            const gateQubits = getGateQubits(g);
-            const overlaps = gateQubits.some((q) => q >= minQ && q <= maxQ);
-            return overlaps ? { ...g, position: g.position + 1 } : g;
-          });
-
-          pushState(compactGates([...shifted, newGate]));
+        case 'PLACE_CNOT':
+          insertGate(
+            { type: 'CNOT', control: command.controlRow, target: command.targetRow },
+            command.col,
+            options
+          );
           break;
-        }
+
+        case 'MOVE_GATE':
+          moveGate(command.gateId, { row: command.row, column: command.col }, options);
+          break;
 
         case 'DELETE_GATE': {
-          const gateAtCursor = findGateAt(gates, command.row, command.col);
-          if (!gateAtCursor) return;
-          const remaining = gates.filter((g) => g.id !== gateAtCursor.id);
-          pushState(compactGates(remaining));
+          const gateAtCursor = findGateAt(circuitRef.current.gates, command.row, command.col);
+          if (gateAtCursor) removeGate(gateAtCursor.id, options);
           break;
         }
 
         case 'UNDO':
-          undo();
+          undo(options);
           break;
 
         case 'REDO':
-          redo();
+          redo(options);
           break;
       }
     },
-    [pushState, undo, redo]
+    [insertGate, removeGate, moveGate, undo, redo]
   );
 
   // Handle an FSM action
@@ -170,7 +130,18 @@ export function useCircuitKeyboard({
         maxCol: Math.max(0, numPositionsRef.current - 1),
       };
 
-      const result = interactionFsm(interactionStateRef.current, cursorRef.current, action, bounds);
+      const gateAt = (row: number, col: number) => {
+        const gate = findGateAt(circuitRef.current.gates, row, col);
+        return gate ? { gateId: gate.id, grabOffset: row - getGateRow(gate) } : null;
+      };
+
+      const result = interactionFsm(
+        interactionStateRef.current,
+        cursorRef.current,
+        action,
+        bounds,
+        gateAt
+      );
 
       setInteractionState(result.state);
       setCursor(result.cursor);
@@ -207,34 +178,5 @@ export function useCircuitKeyboard({
     cursor,
     interactionState,
     inputSource,
-    canUndo,
-    canRedo,
   };
-}
-
-// --- Helpers ---
-
-function getGateQubits(gate: Gate): number[] {
-  if (gate.type === 'CNOT' && gate.control !== undefined && gate.target !== undefined) {
-    const minQ = Math.min(gate.control, gate.target);
-    const maxQ = Math.max(gate.control, gate.target);
-    const qubits: number[] = [];
-    for (let q = minQ; q <= maxQ; q++) {
-      qubits.push(q);
-    }
-    return qubits;
-  }
-  return gate.qubit !== undefined ? [gate.qubit] : [];
-}
-
-function findGateAt(gates: Gate[], row: number, col: number): Gate | null {
-  return (
-    gates.find((g) => {
-      if (g.position !== col) return false;
-      if (g.type === 'CNOT') {
-        return g.control === row || g.target === row;
-      }
-      return g.qubit === row;
-    }) ?? null
-  );
 }

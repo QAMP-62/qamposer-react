@@ -4,6 +4,9 @@
  */
 
 import type { Gate, GateType, Circuit, QasmParseResult } from '../types';
+import { compactGates, generateGateId, getGateQubits } from '../circuit/operations';
+
+export { compactGates, generateGateId };
 
 const QASM_HEADER = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n';
 
@@ -123,50 +126,6 @@ function formatParameter(value: number): string {
 
   // Default to decimal representation
   return value.toFixed(6).replace(/\.?0+$/, '');
-}
-
-/**
- * Get all qubit indices a gate occupies.
- * For CNOT, this includes all qubits between control and target
- * (the vertical line spans through them).
- */
-function getGateQubits(gate: Gate): number[] {
-  if (gate.type === 'CNOT' && gate.control !== undefined && gate.target !== undefined) {
-    const minQubit = Math.min(gate.control, gate.target);
-    const maxQubit = Math.max(gate.control, gate.target);
-    const qubits: number[] = [];
-    for (let q = minQubit; q <= maxQubit; q++) {
-      qubits.push(q);
-    }
-    return qubits;
-  }
-  return gate.qubit !== undefined ? [gate.qubit] : [];
-}
-
-/**
- * Compact gates to left-align them (remove gaps)
- */
-export function compactGates(gatesToCompact: Gate[]): Gate[] {
-  const qubitMinPositions = new Map<number, number>();
-  const sorted = [...gatesToCompact].sort((a, b) => a.position - b.position);
-
-  return sorted.map((gate) => {
-    const gateQubits = getGateQubits(gate);
-
-    // Calculate minimum available position for this gate
-    let newPosition = 0;
-    gateQubits.forEach((q) => {
-      const minPos = qubitMinPositions.get(q) || 0;
-      newPosition = Math.max(newPosition, minPos);
-    });
-
-    // Update next available position for all qubits this gate occupies
-    gateQubits.forEach((q) => {
-      qubitMinPositions.set(q, newPosition + 1);
-    });
-
-    return { ...gate, position: newPosition };
-  });
 }
 
 /**
@@ -343,13 +302,6 @@ function parseParameter(str: string): number | null {
   // Try parsing as number
   const num = parseFloat(trimmed);
   return isNaN(num) ? null : num;
-}
-
-/**
- * Generate unique gate ID
- */
-export function generateGateId(): string {
-  return `gate-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 /**

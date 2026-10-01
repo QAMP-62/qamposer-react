@@ -295,4 +295,81 @@ describe('interactionFsm', () => {
       expect(result.state).toEqual({ type: 'cnot_control' });
     });
   });
+
+  describe('moving placed gates', () => {
+    // A CNOT spanning rows 0-2 in column 3, grabbed at row 1
+    const gateAt = (row: number, col: number) =>
+      col === 3 && row === 1 ? { gateId: 'cx', grabOffset: 1 } : null;
+
+    it('picks up the gate under the cursor on ACTIVATE_CELL in idle', () => {
+      const result = interactionFsm(
+        { type: 'idle' },
+        cursor,
+        { type: 'ACTIVATE_CELL' },
+        bounds,
+        gateAt
+      );
+      expect(result.state).toEqual({ type: 'moving', gateId: 'cx', grabOffset: 1 });
+      expect(result.command).toBeNull();
+    });
+
+    it('does nothing on an empty cell', () => {
+      const result = interactionFsm(
+        { type: 'idle' },
+        { row: 0, col: 0 },
+        { type: 'ACTIVATE_CELL' },
+        bounds,
+        gateAt
+      );
+      expect(result.state).toEqual({ type: 'idle' });
+    });
+
+    it('keeps moving while the cursor moves', () => {
+      const moving: InteractionState = { type: 'moving', gateId: 'cx', grabOffset: 1 };
+      const result = interactionFsm(
+        moving,
+        cursor,
+        { type: 'MOVE_CURSOR', dRow: 1, dCol: 2 },
+        bounds,
+        gateAt
+      );
+      expect(result.state).toEqual(moving);
+      expect(result.cursor).toEqual({ row: 2, col: 5 });
+    });
+
+    it('drops with MOVE_GATE, subtracting the grab offset from the row', () => {
+      const result = interactionFsm(
+        { type: 'moving', gateId: 'cx', grabOffset: 1 },
+        { row: 3, col: 7 },
+        { type: 'ACTIVATE_CELL' },
+        bounds,
+        gateAt
+      );
+      expect(result.command).toEqual({ type: 'MOVE_GATE', gateId: 'cx', row: 2, col: 7 });
+      expect(result.state).toEqual({ type: 'idle' });
+    });
+
+    it('cancels with CANCEL', () => {
+      const result = interactionFsm(
+        { type: 'moving', gateId: 'cx', grabOffset: 1 },
+        cursor,
+        { type: 'CANCEL' },
+        bounds,
+        gateAt
+      );
+      expect(result.state).toEqual({ type: 'idle' });
+      expect(result.command).toBeNull();
+    });
+
+    it('switches to placing when a gate is selected', () => {
+      const result = interactionFsm(
+        { type: 'moving', gateId: 'cx', grabOffset: 1 },
+        cursor,
+        { type: 'SELECT_GATE', gateType: 'H' },
+        bounds,
+        gateAt
+      );
+      expect(result.state).toEqual({ type: 'placing', gateType: 'H' });
+    });
+  });
 });

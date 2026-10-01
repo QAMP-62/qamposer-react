@@ -30,7 +30,7 @@ function getModeInfo(state: InteractionState): { mode: string; hints: string } {
     case 'idle':
       return {
         mode: 'IDLE',
-        hints: '1-7: Select gate / WASD: Move / Esc: Exit keyboard',
+        hints: '1-7: Select gate / Space on a gate: Move it / WASD: Move / Esc: Exit keyboard',
       };
     case 'placing':
       return {
@@ -46,6 +46,11 @@ function getModeInfo(state: InteractionState): { mode: string; hints: string } {
       return {
         mode: 'CNOT: Select Target',
         hints: 'Space: Confirm target / Esc: Cancel',
+      };
+    case 'moving':
+      return {
+        mode: 'MOVING GATE',
+        hints: 'WASD: Choose destination / Space: Drop / Esc: Cancel',
       };
   }
 }

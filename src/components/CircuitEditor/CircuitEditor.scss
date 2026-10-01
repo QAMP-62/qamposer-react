@@ -1,3 +1,12 @@
+// Press-and-drag targets: allow page scrolling (touch drags start on long-press),
+// but no text selection or long-press callout
+@mixin draggable {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .circuit-editor {
   flex: 1;
   background: var(--qamposer-bg-secondary, #262626);
@@ -118,26 +127,6 @@
     }
   }
 
-  &__drop-zone-continuous {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    height: 100%;
-    pointer-events: all;
-    z-index: 1;
-  }
-
-  &__preview {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-    z-index: 3;
-  }
-
   &__gates {
     position: absolute;
     top: 0;
@@ -157,10 +146,18 @@
     align-items: center;
     justify-content: center;
     transform: translate(-50%, -50%);
-    cursor: pointer;
+    cursor: grab;
     pointer-events: all;
     transition: all 0.2s;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    @include draggable;
+
+    // Enlarge the touch target to 44px without changing the visuals
+    &::before {
+      content: '';
+      position: absolute;
+      inset: -6px;
+    }
 
     &:hover {
       transform: translate(-50%, -50%) scale(1.1);
@@ -201,6 +198,20 @@
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
       }
     }
+
+    // The gate being moved, shown at its drop position
+    &--moving {
+      opacity: 0.8;
+      outline: 2px dashed var(--qamposer-accent, #4285f4);
+      outline-offset: 2px;
+      pointer-events: none;
+    }
+
+    // The gate being moved while the pointer is outside the circuit
+    &--dragging {
+      opacity: 0.3;
+      pointer-events: none;
+    }
   }
 
   &__gate-label {
@@ -226,9 +237,11 @@
   &__cnot {
     position: absolute;
     transform: translateX(-50%);
-    cursor: pointer;
+    cursor: grab;
     pointer-events: all;
     width: 40px;
+    transition: left 0.2s;
+    @include draggable;
 
     &--selected {
       .circuit-editor__cnot-line {
@@ -266,6 +279,18 @@
     &--shifted-preview {
       opacity: 0.5;
       cursor: default;
+      pointer-events: none;
+    }
+
+    &--moving {
+      opacity: 0.8;
+      outline: 2px dashed var(--qamposer-accent, #4285f4);
+      outline-offset: 2px;
+      pointer-events: none;
+    }
+
+    &--dragging {
+      opacity: 0.3;
       pointer-events: none;
     }
   }

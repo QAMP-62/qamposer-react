@@ -6,6 +6,8 @@ import { QamposerMicro } from '../presets/QamposerMicro';
 import { useQamposer } from '../hooks/useQamposer';
 import type {
   Circuit,
+  CircuitEditEvent,
+  ResultChangeEvent,
   QamposerContextValue,
   SimulationAdapter,
   SimulationCompleteEvent,
@@ -286,5 +288,462 @@ describe('presets inside an outer QamposerProvider', () => {
     await flush();
 
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('editing actions, history and onCircuitEdit', () => {
+  function setup(props: Partial<React.ComponentProps<typeof QamposerProvider>> = {}) {
+    const { ctx, Probe } = captureContext();
+    const onCircuitEdit = vi.fn<(event: CircuitEditEvent) => void>();
+    const utils = render(
+      <QamposerProvider defaultCircuit={BELL} onCircuitEdit={onCircuitEdit} {...props}>
+        <Probe />
+      </QamposerProvider>
+    );
+    return { ctx, onCircuitEdit, ...utils };
+  }
+
+  it('reports a move with the moved gate, its cells and the displaced gates', async () => {
+    const { ctx, onCircuitEdit } = setup();
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    // Bell: H(q0, col 0), CNOT(0→1, col 1). Moving H after the CNOT on q1 lets the
+    // CNOT slide left to column 0, which is reported as a displacement.
+    let moved = false;
+    act(() => {
+      moved = ctx.current!.moveGate('g1', { row: 1, column: 1 }, { origin: 'pointer' });
+    });
+
+    expect(moved).toBe(true);
+    const event = onCircuitEdit.mock.calls[0][0];
+    expect(event).toMatchObject({
+      action: 'move',
+      origin: 'pointer',
+      gateId: 'g1',
+      from: { row: 0, column: 0 },
+      to: { row: 1, column: 1 },
+      displaced: [{ id: 'g2', from: 1, to: 0 }],
+    });
+    expect(event.before).toEqual(BELL);
+  });
+
+  it('returns false and emits nothing for a move that changes nothing', async () => {
+    const { ctx, onCircuitEdit } = setup();
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    let moved = true;
+    act(() => {
+      moved = ctx.current!.moveGate('g1', { row: 0, column: 0 });
+    });
+
+    expect(moved).toBe(false);
+    expect(onCircuitEdit).not.toHaveBeenCalled();
+    expect(ctx.current!.canUndo).toBe(false);
+  });
+
+  it('reports inserted gates and the gates they push right', async () => {
+    const { ctx, onCircuitEdit } = setup();
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    let id: string | null = null;
+    act(() => {
+      id = ctx.current!.insertGate({ type: 'X', qubit: 0 }, 0, { origin: 'keyboard' });
+    });
+
+    expect(onCircuitEdit.mock.calls[0][0]).toMatchObject({
+      action: 'add',
+      origin: 'keyboard',
+      gateId: id,
+      displaced: [
+        { id: 'g1', from: 0, to: 1 },
+        { id: 'g2', from: 1, to: 2 },
+      ],
+    });
+  });
+
+  it('undoes and redoes every kind of edit in one history', async () => {
+    const { ctx, onCircuitEdit } = setup();
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    act(() => {
+      ctx.current!.insertGate({ type: 'Z', qubit: 1 }, 0, { origin: 'pointer' });
+    });
+    act(() => {
+      ctx.current!.addQubit();
+    });
+    act(() => {
+      ctx.current!.removeGate('g1', { origin: 'keyboard' });
+    });
+    expect(ctx.current!.circuit.qubits).toBe(3);
+    expect(ctx.current!.canUndo).toBe(true);
+
+    act(() => ctx.current!.undo());
+    act(() => ctx.current!.undo());
+    act(() => ctx.current!.undo());
+
+    expect(ctx.current!.circuit).toEqual(BELL);
+    expect(ctx.current!.canUndo).toBe(false);
+    expect(ctx.current!.canRedo).toBe(true);
+    expect(onCircuitEdit.mock.lastCall![0]).toMatchObject({ action: 'undo', origin: 'api' });
+
+    act(() => ctx.current!.redo({ origin: 'keyboard' }));
+    expect(ctx.current!.circuit.gates).toHaveLength(3);
+    expect(onCircuitEdit.mock.lastCall![0]).toMatchObject({
+      action: 'redo',
+      origin: 'keyboard',
+    });
+  });
+
+  it('collapses consecutive code-editor edits into one undo step', async () => {
+    const { ctx, onCircuitEdit } = setup();
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    const qasm = (body: string) =>
+      `OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[2];\ncreg c[2];\n${body}`;
+    act(() => ctx.current!.setQasmCode(qasm('h q[0];\n')));
+    act(() => ctx.current!.setQasmCode(qasm('h q[0];\nx q[1];\n')));
+    act(() => ctx.current!.setQasmCode(qasm('h q[0];\nx q[1];\nz q[0];\n')));
+
+    expect(onCircuitEdit).toHaveBeenCalledTimes(3);
+    expect(onCircuitEdit.mock.calls[0][0]).toMatchObject({ action: 'code', origin: 'code' });
+
+    act(() => ctx.current!.undo());
+    expect(ctx.current!.circuit).toEqual(BELL);
+    expect(ctx.current!.canUndo).toBe(false);
+  });
+
+  it('keeps the edited gate in sync with the circuit', async () => {
+    const rotation: Circuit = {
+      qubits: 1,
+      gates: [{ id: 'r', type: 'RX', qubit: 0, position: 0, parameter: 1 }],
+    };
+    const { ctx } = setup({ defaultCircuit: rotation });
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    act(() => ctx.current!.setEditingGate(ctx.current!.circuit.gates[0]));
+    act(() => ctx.current!.updateGate('r', { parameter: 2 }));
+    expect(ctx.current!.editingGate?.parameter).toBe(2);
+
+    act(() => ctx.current!.undo());
+    expect(ctx.current!.editingGate?.parameter).toBe(1);
+
+    act(() => ctx.current!.removeGate('r'));
+    expect(ctx.current!.editingGate).toBeNull();
+  });
+
+  it('clears history when a controlled parent replaces the circuit', async () => {
+    const { ctx, Probe } = captureContext();
+    let replace: (circuit: Circuit) => void = () => {};
+
+    function Parent() {
+      const [circuit, setCircuit] = useState<Circuit>(BELL);
+      useEffect(() => {
+        replace = (next) => setCircuit(next);
+      });
+      return (
+        <QamposerProvider circuit={circuit} onCircuitChange={setCircuit}>
+          <Probe />
+        </QamposerProvider>
+      );
+    }
+
+    render(<Parent />);
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    act(() => {
+      ctx.current!.insertGate({ type: 'X', qubit: 1 }, 0);
+    });
+    // Edits made through the provider stay undoable in controlled mode
+    expect(ctx.current!.canUndo).toBe(true);
+
+    act(() => replace({ qubits: 3, gates: [] }));
+    expect(ctx.current!.canUndo).toBe(false);
+  });
+});
+
+describe('onCircuitEdit changes and reverts', () => {
+  const HEADER = 'OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[2];\ncreg c[2];\n';
+
+  function setup(circuit: Circuit = BELL) {
+    const { ctx, Probe } = captureContext();
+    const onCircuitEdit = vi.fn<(event: CircuitEditEvent) => void>();
+    render(
+      <QamposerProvider defaultCircuit={circuit} onCircuitEdit={onCircuitEdit}>
+        <Probe />
+      </QamposerProvider>
+    );
+    const last = () => onCircuitEdit.mock.lastCall![0];
+    return { ctx, onCircuitEdit, last };
+  }
+
+  it('attaches changes to every action', async () => {
+    const { ctx, onCircuitEdit } = setup();
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    act(() => {
+      ctx.current!.insertGate({ type: 'X', qubit: 1 }, 0);
+    });
+    act(() => ctx.current!.addQubit());
+    act(() => ctx.current!.setQubits(2));
+    act(() => ctx.current!.undo());
+    act(() => ctx.current!.redo());
+    act(() => ctx.current!.clearCircuit());
+    act(() => {
+      ctx.current!.importQasm(`${HEADER}h q[0];\n`);
+    });
+    act(() => ctx.current!.setQasmCode(`${HEADER}h q[0];\nx q[1];\n`));
+
+    for (const [event] of onCircuitEdit.mock.calls) {
+      expect(event.changes).toEqual(
+        expect.objectContaining({
+          added: expect.any(Array),
+          removed: expect.any(Array),
+          updated: expect.any(Array),
+        })
+      );
+    }
+    expect(onCircuitEdit).toHaveBeenCalledTimes(8);
+  });
+
+  it('agrees with gateId and displaced for single-gate edits', async () => {
+    const { ctx, last } = setup();
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    // Insert pushes both Bell gates right
+    act(() => {
+      ctx.current!.insertGate({ type: 'X', qubit: 0 }, 0);
+    });
+    let event = last();
+    expect(event.changes.added.map((g) => g.id)).toEqual([event.gateId]);
+    expect(event.changes.updated.map((u) => u.after.id).sort()).toEqual(
+      event.displaced.map((d) => d.id).sort()
+    );
+
+    // Move: updated = the moved gate + displaced gates
+    act(() => {
+      ctx.current!.moveGate('g1', { row: 1, column: 5 });
+    });
+    event = last();
+    expect(event.changes.updated.map((u) => u.after.id).sort()).toEqual(
+      [event.gateId!, ...event.displaced.map((d) => d.id)].sort()
+    );
+
+    // Remove
+    act(() => ctx.current!.removeGate('g2'));
+    event = last();
+    expect(event.changes.removed.map((g) => g.id)).toEqual(['g2']);
+    expect(event.changes.updated.map((u) => u.after.id).sort()).toEqual(
+      event.displaced.map((d) => d.id).sort()
+    );
+  });
+
+  it('keeps gate ids across code edits, so one added line is one added gate', async () => {
+    const { ctx, last } = setup();
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    act(() => ctx.current!.setQasmCode(`${HEADER}h q[0];\ncx q[0], q[1];\nx q[1];\n`));
+
+    const event = last();
+    expect(event).toMatchObject({ action: 'code', origin: 'code' });
+    expect(event.gateId).toBeUndefined();
+    expect(event.changes.added).toMatchObject([{ type: 'X', qubit: 1 }]);
+    expect(event.changes.removed).toEqual([]);
+    expect(ctx.current!.circuit.gates.map((g) => g.id)).toEqual(
+      expect.arrayContaining(['g1', 'g2'])
+    );
+  });
+
+  it('keeps the edited gate open across code edits', async () => {
+    const rotation: Circuit = {
+      qubits: 2,
+      gates: [{ id: 'r', type: 'RX', qubit: 0, position: 0, parameter: Math.PI / 2 }],
+    };
+    const { ctx } = setup(rotation);
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    act(() => ctx.current!.setEditingGate(ctx.current!.circuit.gates[0]));
+    act(() => ctx.current!.setQasmCode(`${HEADER}rx(pi) q[0];\nh q[1];\n`));
+
+    expect(ctx.current!.editingGate).toMatchObject({ id: 'r', parameter: Math.PI });
+  });
+
+  it('reports importQasm as a full replacement', async () => {
+    const { ctx, last } = setup();
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    act(() => {
+      ctx.current!.importQasm(`${HEADER}h q[0];\ncx q[0], q[1];\n`);
+    });
+
+    const { changes } = last();
+    expect(changes.removed.map((g) => g.id).sort()).toEqual(['g1', 'g2']);
+    expect(changes.added).toHaveLength(2);
+  });
+
+  it('reports gates dropped and renumbered by removing a qubit', async () => {
+    const circuit: Circuit = {
+      qubits: 3,
+      gates: [
+        { id: 'a', type: 'H', qubit: 0, position: 0 },
+        { id: 'b', type: 'X', qubit: 1, position: 0 },
+        { id: 'c', type: 'Z', qubit: 2, position: 0 },
+      ],
+    };
+    const { ctx, last } = setup(circuit);
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    act(() => ctx.current!.removeQubit(1));
+
+    const { changes } = last();
+    expect(changes.removed.map((g) => g.id)).toEqual(['b']);
+    expect(changes.updated).toEqual([
+      { before: circuit.gates[2], after: { ...circuit.gates[2], qubit: 1 } },
+    ]);
+    expect(changes.qubits).toEqual({ from: 3, to: 2 });
+  });
+
+  it('says which edit undo and redo revert', async () => {
+    const { ctx, last } = setup();
+    await waitFor(() => expect(ctx.current).not.toBeNull());
+
+    act(() => {
+      ctx.current!.moveGate('g1', { row: 1, column: 5 }, { origin: 'pointer' });
+    });
+    act(() => ctx.current!.setQasmCode(`${HEADER}h q[0];\n`));
+    act(() => ctx.current!.setQasmCode(`${HEADER}h q[0];\nx q[1];\n`));
+
+    act(() => ctx.current!.undo());
+    expect(last().reverts).toEqual({ action: 'code', origin: 'code' });
+
+    act(() => ctx.current!.undo());
+    expect(last().reverts).toEqual({ action: 'move', origin: 'pointer', gateId: 'g1' });
+    expect(last().changes.updated.map((u) => u.after.id)).toContain('g1');
+
+    act(() => ctx.current!.redo());
+    expect(last()).toMatchObject({
+      action: 'redo',
+      reverts: { action: 'move', origin: 'pointer', gateId: 'g1' },
+    });
+  });
+});
+
+describe('realtimeShots and onResultChange', () => {
+  function setup(props: Partial<React.ComponentProps<typeof QamposerProvider>> = {}) {
+    const factory = makeAdapterFactory();
+    const { ctx, Probe } = captureContext();
+    const onResultChange = vi.fn<(event: ResultChangeEvent) => void>();
+    render(
+      <QamposerProvider
+        defaultCircuit={BELL}
+        adapter={factory.create()}
+        onResultChange={onResultChange}
+        {...props}
+      >
+        <Probe />
+      </QamposerProvider>
+    );
+    return { ctx, factory, onResultChange };
+  }
+
+  it('uses 1024 shots for automatic simulation by default', async () => {
+    const { factory } = setup();
+    await waitFor(() => expect(factory.simulate).toHaveBeenCalled());
+    expect(factory.simulate).toHaveBeenLastCalledWith(expect.objectContaining({ shots: 1024 }));
+  });
+
+  it('uses config.realtimeShots, capped at maxShots', async () => {
+    const custom = setup({ config: { realtimeShots: 256 } });
+    await waitFor(() => expect(custom.factory.simulate).toHaveBeenCalled());
+    expect(custom.factory.simulate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ shots: 256 })
+    );
+    cleanup();
+
+    const capped = setup({ config: { realtimeShots: 5000, maxShots: 2000 } });
+    await waitFor(() => expect(capped.factory.simulate).toHaveBeenCalled());
+    expect(capped.factory.simulate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ shots: 2000 })
+    );
+  });
+
+  it('reports new results and cleared results with a reason', async () => {
+    const { ctx, onResultChange } = setup();
+    await waitFor(() => expect(onResultChange).toHaveBeenCalledTimes(1));
+    expect(onResultChange).toHaveBeenLastCalledWith({
+      result: RESULT,
+      source: 'realtime',
+      reason: 'simulation',
+    });
+
+    // Removing the last gates empties the circuit
+    act(() => ctx.current!.removeGate('g1'));
+    await waitFor(() => expect(onResultChange).toHaveBeenCalledTimes(2));
+    act(() => ctx.current!.removeGate('g2'));
+    await waitFor(() =>
+      expect(onResultChange).toHaveBeenLastCalledWith({
+        result: null,
+        source: null,
+        reason: 'empty-circuit',
+      })
+    );
+    expect(ctx.current!.result).toBeNull();
+  });
+
+  it('reports clearCircuit once, as a clear', async () => {
+    const { ctx, onResultChange } = setup();
+    await waitFor(() => expect(onResultChange).toHaveBeenCalledTimes(1));
+
+    act(() => ctx.current!.clearCircuit());
+    await flush();
+
+    expect(onResultChange).toHaveBeenCalledTimes(2);
+    expect(onResultChange).toHaveBeenLastCalledWith({
+      result: null,
+      source: null,
+      reason: 'clear',
+    });
+  });
+
+  it('reports removeQubit as a clear, then the result of the new circuit', async () => {
+    const circuit: Circuit = {
+      qubits: 3,
+      gates: [
+        { id: 'a', type: 'H', qubit: 0, position: 0 },
+        { id: 'b', type: 'X', qubit: 2, position: 0 },
+      ],
+    };
+    const { ctx, onResultChange } = setup({ defaultCircuit: circuit });
+    await waitFor(() => expect(onResultChange).toHaveBeenCalledTimes(1));
+
+    act(() => ctx.current!.removeQubit(2));
+
+    await waitFor(() => expect(onResultChange).toHaveBeenCalledTimes(3));
+    expect(onResultChange.mock.calls[1][0]).toMatchObject({ result: null, reason: 'remove-qubit' });
+    expect(onResultChange.mock.calls[2][0]).toMatchObject({ reason: 'simulation' });
+  });
+
+  it('does not report clearing when there is no result', async () => {
+    const { onResultChange } = setup({ defaultCircuit: { qubits: 2, gates: [] } });
+    await flush();
+    expect(onResultChange).not.toHaveBeenCalled();
+  });
+
+  it('drops an in-flight simulation when the circuit becomes empty', async () => {
+    let resolve: (result: SimulationResult) => void = () => {};
+    const slow = vi.fn(
+      () =>
+        new Promise<SimulationResult>((r) => {
+          resolve = r;
+        })
+    );
+    const { ctx, onResultChange } = setup({ adapter: makeAdapterFactory(slow).create() });
+    await waitFor(() => expect(slow).toHaveBeenCalledTimes(1));
+
+    act(() => ctx.current!.clearCircuit());
+    await act(async () => resolve(RESULT));
+    await flush();
+
+    expect(ctx.current!.result).toBeNull();
+    expect(onResultChange).not.toHaveBeenCalled();
   });
 });

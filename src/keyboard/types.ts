@@ -14,7 +14,9 @@ export type InteractionState =
   | { type: 'idle' }
   | { type: 'placing'; gateType: GateType }
   | { type: 'cnot_control' }
-  | { type: 'cnot_target'; controlRow: number };
+  | { type: 'cnot_target'; controlRow: number }
+  // Moving a placed gate; grabOffset = grabbed row - gate's top-most row (CNOT)
+  | { type: 'moving'; gateId: string; grabOffset: number };
 
 // Device-agnostic Actions
 export type InteractionAction =
@@ -32,8 +34,17 @@ export type CircuitCommand =
   | { type: 'PLACE_GATE'; gateType: GateType; row: number; col: number; parameter?: number }
   | { type: 'PLACE_CNOT'; controlRow: number; targetRow: number; col: number }
   | { type: 'DELETE_GATE'; row: number; col: number }
+  // row is the gate's new top-most row
+  | { type: 'MOVE_GATE'; gateId: string; row: number; col: number }
   | { type: 'UNDO' }
   | { type: 'REDO' };
+
+// Gate occupying a cell, as seen by the FSM
+export interface GateAtCell {
+  gateId: string;
+  /** Rows between the gate's top-most row and this cell (CNOT) */
+  grabOffset: number;
+}
 
 // FSM transition result
 export interface FsmResult {

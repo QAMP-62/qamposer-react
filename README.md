@@ -65,13 +65,7 @@ import { Qamposer } from '@qamposer/react/visualization';
 import { localAdapter } from '@qamposer/react';
 
 function App() {
-  return (
-    <Qamposer
-      adapter={localAdapter()}
-      defaultTheme="dark"
-      showThemeToggle
-    />
-  );
+  return <Qamposer adapter={localAdapter()} defaultTheme="dark" showThemeToggle />;
 }
 ```
 
@@ -186,6 +180,7 @@ interface QamposerProps {
   circuit?: Circuit; // Controlled mode
   defaultCircuit?: Circuit; // Initial circuit
   onCircuitChange?: (circuit: Circuit) => void;
+  onCircuitEdit?: (event: CircuitEditEvent) => void; // One event per edit, with its reason
 
   // Simulation
   adapter?: SimulationAdapter; // Backend adapter (default: noopAdapter)
@@ -193,6 +188,7 @@ interface QamposerProps {
   onSimulationStart?: (event: SimulationStartEvent) => void;
   onSimulationComplete?: (event: SimulationCompleteEvent) => void;
   onSimulationError?: (event: SimulationErrorEvent) => void;
+  onResultChange?: (event: ResultChangeEvent) => void; // Result shown or cleared
 
   // Configuration
   config?: QamposerConfig;
@@ -218,6 +214,7 @@ interface QamposerConfig {
   maxQubits?: number; // Default: 5
   maxGates?: number; // Default: 500
   maxShots?: number; // Default: 10000
+  realtimeShots?: number; // Shots for the automatic simulation on each edit. Default: 1024 (capped at maxShots)
 }
 ```
 
@@ -234,7 +231,49 @@ Every simulation event carries `circuit`, `qasm`, and `source`: `'realtime'` for
 />
 ```
 
+To mirror the displayed result in your own UI, use `onResultChange`. It fires whenever `result` changes, including when it is cleared, which `onSimulationComplete` never reports:
+
+```tsx
+<QamposerMicro
+  adapter={localAdapter()}
+  config={{ realtimeShots: 4096 }}
+  onResultChange={({ result, source, reason }) => {
+    // reason: 'simulation' | 'empty-circuit' | 'clear' | 'remove-qubit'
+    setCounts(result?.counts ?? null);
+  }}
+/>
+```
+
 Callbacks and adapters can be passed inline: the provider always calls the latest callback without re-running the simulation. Creating an adapter inline still re-checks `isAvailable()` on every parent render, so for network adapters prefer creating them once outside the component (or with `useMemo`).
+
+### Adapter Availability
+
+The provider checks the main `adapter` with `isAvailable()` on mount (for `qiskitAdapter`, a request to `/health`). The result is exposed as `adapterStatus`:
+
+| `adapterStatus` | Meaning                                                         |
+| --------------- | --------------------------------------------------------------- |
+| `'checking'`    | The first check has not finished yet                            |
+| `'available'`   | `simulate()` can run (`canSimulate` is `true`)                  |
+| `'unavailable'` | The check returned `false` or failed (e.g. backend not running) |
+
+`simulate()` is safe to call at any time:
+
+- While `'checking'`, it waits for the check instead of failing, so calling it right after mount works.
+- When `'unavailable'`, it checks once more, so a backend started after the page loaded is picked up without a reload.
+- If the adapter is still unavailable, it rejects with `Simulation adapter is not available`, sets `status: 'error'` and `error`, and calls `onSimulationError` with `source: 'run'`.
+
+The built-in "Set up and run" dialog shows **Connecting...** while checking, disables Run when the backend is unavailable, and shows a failed run inside the dialog. In `buttonOnly` mode, a failed run turns the button into **Retry** with the error as its tooltip.
+
+```tsx
+function RunButton() {
+  const { simulate, adapterStatus } = useQamposer();
+  return (
+    <button disabled={adapterStatus === 'unavailable'} onClick={() => simulate().catch(showError)}>
+      {adapterStatus === 'checking' ? 'Connecting...' : 'Run'}
+    </button>
+  );
+}
+```
 
 ### Controlling a Preset from Your App
 
@@ -278,6 +317,118 @@ function App() {
 
 When a preset is inside a `QamposerProvider`, pass provider props (`adapter`, `circuit`, `onSimulationComplete`, ...) to the provider; the same props on the preset are ignored with a console warning. An outer `ThemeProvider` is reused in the same way.
 
+### useQamposer() Reference
+
+Available anywhere inside a `QamposerProvider` (including inside the presets). Editing actions take an optional last argument `{ origin }` (`'pointer' | 'keyboard' | 'code' | 'api'`, default `'api'`), reported in `onCircuitEdit`.
+
+| State           | Description                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| `circuit`       | Current circuit                                                                                  |
+| `result`        | Displayed simulation result, or `null`                                                           |
+| `resultSource`  | What produced `result`: `'realtime'` or `'run'` (`null` without a result)                        |
+| `status`        | `'idle' \| 'simulating' \| 'error'`                                                              |
+| `error`         | Last simulation error, or `null`                                                                 |
+| `qasmCode`      | Text shown in the code editor                                                                    |
+| `parseError`    | First QASM parse error of `qasmCode`, or `null`                                                  |
+| `editingGate`   | Gate open in the gate editor, kept in sync with the circuit                                      |
+| `canUndo`       | Whether `undo()` has something to undo                                                           |
+| `canRedo`       | Whether `redo()` has something to redo                                                           |
+| `canSimulate`   | `adapterStatus === 'available'`                                                                  |
+| `adapterStatus` | `'checking' \| 'available' \| 'unavailable'` (see [Adapter Availability](#adapter-availability)) |
+| `adapter`       | The main adapter                                                                                 |
+| `config`        | Resolved `QamposerConfig` (defaults filled in)                                                   |
+
+| Action                               | Description                                                                                 |
+| ------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `setCircuit(circuit)`                | Replace the whole circuit (your gate ids are kept)                                          |
+| `insertGate(placement, column)`      | Insert a gate, pushing overlapping gates right. Returns the new id (`null` at `maxGates`)   |
+| `moveGate(gateId, { row, column })`  | Move a placed gate. For CNOT, `row` is the top-most row. Returns `false` if nothing changed |
+| `addGate(gate)`                      | Add a gate at its own `position` without shifting. Returns the new id                       |
+| `removeGate(id)`                     | Remove a gate and left-compact the rest                                                     |
+| `updateGate(id, updates)`            | Change a gate's parameter or CNOT qubits (no-op if nothing changes)                         |
+| `updateGates(gates)`                 | Replace all gates at once                                                                   |
+| `setQubits(count)`                   | Set the qubit count (clamped to `1..maxQubits`)                                             |
+| `addQubit()` / `removeQubit(index?)` | Add a qubit / remove one (and the gates on it; default: the last qubit)                     |
+| `clearCircuit()`                     | Remove all gates                                                                            |
+| `undo()` / `redo()`                  | Step through the shared edit history                                                        |
+| `importQasm(code)`                   | Load OpenQASM as a new circuit. Returns the parse result                                    |
+| `setQasmCode(code)`                  | Edit as if typed in the code editor (keeps ids of untouched gates)                          |
+| `exportQasm()`                       | Current circuit as OpenQASM                                                                 |
+| `setEditingGate(gate)`               | Open (`gate`) or close (`null`) the gate editor                                             |
+| `simulate(shots?, profile?)`         | Run on the main adapter (see [Adapter Availability](#adapter-availability))                 |
+
+### Editing Gates
+
+Gates can be placed from the palette and moved after placement. Gates are always left-aligned, so moving a gate reorders it on its qubit or moves it to another qubit.
+
+| Input    | Place a gate                                                                             | Move a placed gate                                      |
+| -------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Mouse    | Drag from the palette                                                                    | Drag the gate                                           |
+| Touch    | Long-press a palette gate, then drag                                                     | Long-press the gate, then drag (a quick swipe scrolls)  |
+| Keyboard | `1`-`7` (H, X, Y, Z, RX, RY, CNOT) or `Q` / `E` to cycle (includes RZ), `Space` to place | `Space` on a gate, arrow keys / `WASD`, `Space` to drop |
+
+Drop outside the circuit or press `Esc` to cancel a drag. Every edit (pointer, keyboard, code editor, or API) goes into one undo history: `Ctrl/Cmd+Z` and `Ctrl/Cmd+Y` in the editor, or `undo()` / `redo()` from `useQamposer()`.
+
+The same operations are available programmatically:
+
+```tsx
+const { insertGate, moveGate, removeGate, undo, redo, canUndo, canRedo } = useQamposer();
+
+const id = insertGate({ type: 'H', qubit: 0 }, 0); // insert at column 0, pushing gates right
+moveGate(id, { row: 1, column: 2 }); // for CNOT, row is the top-most row
+```
+
+### Circuit Edit Events
+
+`onCircuitEdit` is called once per edit and says what changed and why. The gate the user acted on is `gateId`; gates that were pushed right or slid left as a side effect are listed separately in `displaced`, so a template can tell a user's move from a knock-on shift.
+
+```tsx
+<QamposerProvider
+  onCircuitEdit={(event) => {
+    // event.action: 'add' | 'move' | 'remove' | 'update' | 'undo' | 'redo'
+    //   | 'add-qubit' | 'remove-qubit' | 'clear' | 'set' | 'import' | 'code'
+    // event.origin: 'pointer' | 'keyboard' | 'code' | 'api'
+    if (event.action === 'add' && event.origin !== 'api') {
+      const gate = event.after.gates.find((g) => g.id === event.gateId);
+      if (gate?.type === 'H' && gate.qubit === 0) goToNextStep();
+    }
+    if (event.action === 'move') {
+      console.log(`${event.gateId} moved`, event.from, '→', event.to, 'displaced:', event.displaced);
+    }
+  }}
+>
+```
+
+Every event carries two kinds of information:
+
+| Kind                        | Fields                                                              | Present on                                                      | Use it for                      |
+| --------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------- |
+| **Intent** — why it changed | `action`, `origin`, `gateId`, `from` / `to`, `displaced`, `reverts` | `gateId` etc. only on single-gate edits; `reverts` on undo/redo | Reacting to what the user did   |
+| **Result** — what changed   | `changes: { added, removed, updated, qubits? }`                     | Every action, including code edits, imports and undo            | Syncing state, scoring, logging |
+
+`changes` matches gates by id and lists every gate whose state changed, including gates that were only pushed aside or renumbered. Use `action` and `gateId` (not `changes.updated`) to decide whether the user moved a gate.
+
+```tsx
+onCircuitEdit={({ action, reverts, changes }) => {
+  if (action === 'undo' && reverts?.action === 'add') showHint('Undid the last gate');
+  for (const gate of changes.added) track('gate-added', gate.type); // any source: palette, code, undo...
+}}
+```
+
+- **Code editor:** typing in the QASM editor keeps the ids of gates the edit did not touch, so adding one line reports one added gate, and changing an angle reports an update of that gate. Code edits have no `gateId`: when identical gates sit next to each other (e.g. two `h q[0];`), which one was deleted cannot be known.
+- **`importQasm`** is treated as loading a new circuit: all gates get new ids and `changes` reports a full replacement. Use `setCircuit` to replace a circuit while keeping your own ids.
+- **Controlled mode:** when the parent replaces `circuit` itself, no event fires (the parent made the change). To compare circuits yourself, use the same logic via `diffCircuits(before, after)`.
+
+> **Migrating from 0.2.x**
+>
+> - Gates are no longer dragged with the HTML5 Drag and Drop API (it does not work on touch devices). Code that dropped gates into the editor via `dataTransfer` should call `insertGate` instead.
+> - `removeGate()` now left-compacts the remaining gates, like deleting from the editor.
+> - `addGate()` now returns the new gate's id (or `null` at `maxGates`).
+> - `editingGate` is tracked by id: it follows the circuit (undo, code edits) and becomes `null` when the gate is removed.
+> - `simulate()` waits for the availability check instead of failing right after mount, and reports an unavailable adapter through `error` / `onSimulationError` as well as by rejecting.
+> - `SimulationCompleteEvent` has a required `source` field. Code that constructs these events itself (e.g. in tests) must set it.
+> - A preset inside your own `ThemeProvider` now uses it instead of creating its own.
+
 <!-- ### Adapters
 
 ```tsx
@@ -295,49 +446,6 @@ const adapter = qiskitAdapter({
 
 // No-op Adapter (editor only, no simulation)
 import { noopAdapter } from '@qamposer/react';
-``` -->
-
-<!-- ### useQamposer Hook
-
-For building custom UIs, use the `useQamposer` hook within a `QamposerProvider`:
-
-```tsx
-import { QamposerProvider, useQamposer, qiskitAdapter } from '@qamposer/react';
-
-function CustomEditor() {
-  const {
-    circuit,
-    result,
-    status,
-    qasmCode,
-    addGate,
-    removeGate,
-    simulate,
-    exportQasm,
-  } = useQamposer();
-
-  return (
-    // Your custom UI
-  );
-}
-
-// Editor-only mode (default)
-function App() {
-  return (
-    <QamposerProvider>
-      <CustomEditor />
-    </QamposerProvider>
-  );
-}
-
-// With backend simulation
-function AppWithSimulation() {
-  return (
-    <QamposerProvider adapter={qiskitAdapter('http://localhost:8080')}>
-      <CustomEditor />
-    </QamposerProvider>
-  );
-}
 ``` -->
 
 <!-- ### Individual Components -->

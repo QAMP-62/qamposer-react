@@ -1,27 +1,83 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { useQamposer } from '../../hooks/useQamposer';
 import { useCircuitKeyboard } from '../../hooks/useCircuitKeyboard';
-import { compactGates, generateGateId } from '../../utils/openqasm';
+import { useGateDrag } from '../../dnd/GateDragContext';
+import * as ops from '../../circuit/operations';
 import { CursorOverlay } from '../CursorOverlay';
 import { StatusBar } from '../StatusBar';
-import type { Gate, GateType } from '../../types';
+import { GATE_COLORS } from '../gateColors';
+import type { CellPosition, Circuit, Gate, GatePlacement, GateType } from '../../types';
+import type { DragPoint, DragSource } from '../../dnd/types';
 import './CircuitEditor.scss';
-
-const GATE_COLORS: Record<GateType, string> = {
-  H: '#fa4d56',
-  X: '#002d9c',
-  Y: '#9f1853',
-  Z: '#33b1ff',
-  RX: '#9f1853',
-  RY: '#9f1853',
-  RZ: '#33b1ff',
-  CNOT: '#002d9c',
-};
 
 const QUBIT_HEIGHT = 80;
 const MIN_POSITIONS = 20;
 const COLUMN_GAP = 20;
 const MIN_LEFT_MARGIN = 16;
+/** Distance from the scroll container's edge that starts auto-scrolling (px) */
+const AUTO_SCROLL_EDGE = 40;
+/** Auto-scroll speed while dragging near an edge (px per frame) */
+const AUTO_SCROLL_SPEED = 10;
+const ROTATION_GATES: GateType[] = ['RX', 'RY', 'RZ'];
+/** Id of the not-yet-created gate in an insert preview */
+const PREVIEW_GATE_ID = '__preview__';
+
+/** What dropping at the hovered cell would do */
+type PendingDrop =
+  | { kind: 'insert'; placement: GatePlacement; column: number }
+  | { kind: 'move'; gateId: string; to: CellPosition };
+
+interface DropPreview {
+  /** Hovered cell, used to skip recomputing while the pointer stays in it */
+  key: string;
+  kind: PendingDrop['kind'];
+  /** The circuit's gates as they would be after the drop */
+  gates: Gate[];
+  /** The inserted or moved gate */
+  activeId: string;
+  /** Gates pushed or compacted by the drop */
+  displacedIds: string[];
+}
+
+type GateVariant = 'normal' | 'insert' | 'move' | 'shifted' | 'dragging';
+
+const VARIANT_CLASS: Record<'gate' | 'cnot', Record<Exclude<GateVariant, 'normal'>, string>> = {
+  gate: {
+    insert: 'circuit-editor__gate--preview',
+    move: 'circuit-editor__gate--moving',
+    shifted: 'circuit-editor__gate--shifted-preview',
+    dragging: 'circuit-editor__gate--dragging',
+  },
+  cnot: {
+    insert: 'circuit-editor__cnot--preview',
+    move: 'circuit-editor__cnot--moving',
+    shifted: 'circuit-editor__cnot--shifted-preview',
+    dragging: 'circuit-editor__cnot--dragging',
+  },
+};
+
+/** Run the pending drop against the circuit without committing it */
+function computePreview(key: string, circuit: Circuit, drop: PendingDrop): DropPreview {
+  if (drop.kind === 'insert') {
+    const result = ops.insertGate(circuit, drop.placement, drop.column, PREVIEW_GATE_ID);
+    return {
+      key,
+      kind: 'insert',
+      gates: result.circuit.gates,
+      activeId: PREVIEW_GATE_ID,
+      displacedIds: result.displaced.map((d) => d.id),
+    };
+  }
+  // A move that changes nothing previews the gate where it already is
+  const result = ops.moveGate(circuit, drop.gateId, drop.to);
+  return {
+    key,
+    kind: 'move',
+    gates: result ? result.circuit.gates : circuit.gates,
+    activeId: drop.gateId,
+    displacedIds: result ? result.displaced.map((d) => d.id) : [],
+  };
+}
 
 export interface CircuitEditorProps {
   /** Additional CSS class */
@@ -29,29 +85,26 @@ export interface CircuitEditorProps {
 }
 
 export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
-  const { circuit, updateGates, addQubit, removeQubit, setEditingGate, config } = useQamposer();
+  const {
+    circuit,
+    insertGate,
+    moveGate,
+    removeGate,
+    addQubit,
+    removeQubit,
+    setEditingGate,
+    config,
+  } = useQamposer();
+  const { session, beginDrag, registerDropTarget } = useGateDrag();
 
   const { qubits, gates } = circuit;
 
-  const [dragOverQubit, setDragOverQubit] = useState<number | null>(null);
-  const [dragOverPosition, setDragOverPosition] = useState<number | null>(null);
   const [selectedGateId, setSelectedGateId] = useState<string | null>(null);
   const [selectedQubitIndex, setSelectedQubitIndex] = useState<number | null>(null);
-  const [draggingGateType, setDraggingGateType] = useState<GateType | null>(null);
-  const [previewShiftedGates, setPreviewShiftedGates] = useState<
-    { id: string; newPosition: number }[]
-  >([]);
+  // Circuit as it would look after the pending drop (drag in progress over the circuit)
+  const [preview, setPreview] = useState<DropPreview | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef<number | null>(null);
-  const lastDropPositionRef = useRef<{ qubit: number; position: number } | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-      }
-    };
-  }, []);
+  const gatesLayerRef = useRef<HTMLDivElement>(null);
 
   // Dynamic number of columns: at least MIN_POSITIONS, or enough for all gates + 2 extra
   const maxGatePos = gates.length > 0 ? Math.max(...gates.map((g) => g.position)) : 0;
@@ -116,8 +169,6 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
 
   // Keyboard navigation
   const { cursor, interactionState, inputSource } = useCircuitKeyboard({
-    circuit,
-    updateGates,
     containerRef: scrollContainerRef,
     numPositions,
     columnLeftXs,
@@ -132,238 +183,182 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
     }
   }, [inputSource]);
 
-  // Get qubits occupied by a gate.
-  // For CNOT, this includes all qubits between control and target
-  // (the vertical line spans through them).
-  const getGateQubits = (gate: Gate): number[] => {
-    if (gate.type === 'CNOT' && gate.control !== undefined && gate.target !== undefined) {
-      const minQubit = Math.min(gate.control, gate.target);
-      const maxQubit = Math.max(gate.control, gate.target);
-      const qubits: number[] = [];
-      for (let q = minQubit; q <= maxQubit; q++) {
-        qubits.push(q);
-      }
-      return qubits;
-    }
-    return gate.qubit !== undefined ? [gate.qubit] : [];
-  };
+  // === Pointer drag and drop (mouse, pen and touch) ===
 
-  // Calculate drop position based on mouse X
-  const calculateDropPosition = useCallback(
-    (
-      mouseX: number,
-      qubit: number,
-      gateType: GateType
-    ): {
-      initialPosition: number;
-      finalPosition: number;
-      shiftedGates: { id: string; newPosition: number }[];
-      control?: number;
-      target?: number;
-    } => {
-      let closestPos = 0;
+  /** Map a viewport point to a grid cell, or null when outside the visible circuit */
+  const cellAt = useCallback(
+    (point: DragPoint): CellPosition | null => {
+      const container = scrollContainerRef.current;
+      const layer = gatesLayerRef.current;
+      if (!container || !layer) return null;
+
+      const visible = container.getBoundingClientRect();
+      if (
+        point.x < visible.left ||
+        point.x > visible.right ||
+        point.y < visible.top ||
+        point.y > visible.bottom
+      ) {
+        return null;
+      }
+
+      // The gates layer scrolls with the content, so its rect already includes scrollLeft
+      const origin = layer.getBoundingClientRect();
+      const row = Math.floor((point.y - origin.top) / QUBIT_HEIGHT);
+      if (row < 0 || row >= qubits) return null;
+
+      const x = point.x - origin.left;
+      let column = 0;
       let minDistance = Infinity;
       for (let pos = 0; pos < numPositions; pos++) {
-        const distance = Math.abs(columnCenterXs[pos] - mouseX);
+        const distance = Math.abs(columnCenterXs[pos] - x);
         if (distance < minDistance) {
           minDistance = distance;
-          closestPos = pos;
+          column = pos;
         }
       }
+      return { row, column };
+    },
+    [qubits, numPositions, columnCenterXs]
+  );
 
-      let targetQubits: number[];
-      let control: number | undefined;
-      let target: number | undefined;
-
-      if (gateType === 'CNOT') {
-        control = Math.min(qubit, qubits - 2);
-        target = control + 1;
-        targetQubits = [control, target];
-      } else {
-        targetQubits = [qubit];
+  /** What dropping `source` on `cell` would do */
+  const resolveDrop = useCallback(
+    (source: DragSource, cell: CellPosition): PendingDrop | null => {
+      if (source.kind === 'circuit') {
+        return {
+          kind: 'move',
+          gateId: source.gateId,
+          to: { row: cell.row - source.grabOffset, column: cell.column },
+        };
       }
-
-      const rightWall = gates
-        .filter((g) => {
-          if (g.type !== 'CNOT' || g.control === undefined || g.target === undefined) {
-            return false;
-          }
-          const gateQubits = getGateQubits(g);
-          return targetQubits.some((q) => gateQubits.includes(q)) && g.position > closestPos;
-        })
-        .sort((a, b) => a.position - b.position)[0];
-
-      let initialPosition: number;
-      if (rightWall) {
-        initialPosition = Math.min(closestPos, rightWall.position - 1);
-      } else {
-        initialPosition = closestPos;
+      if (source.gateType === 'CNOT') {
+        if (qubits < 2) return null;
+        const control = Math.min(cell.row, qubits - 2);
+        return {
+          kind: 'insert',
+          placement: { type: 'CNOT', control, target: control + 1 },
+          column: cell.column,
+        };
       }
-      initialPosition = Math.max(0, initialPosition);
-
-      const shiftedGatesForInsert = gates.map((g) => {
-        const gateQubits = getGateQubits(g);
-        const overlapsQubit = targetQubits.some((q) => gateQubits.includes(q));
-        if (overlapsQubit && g.position >= initialPosition) {
-          return { ...g, position: g.position + 1 };
-        }
-        return g;
-      });
-
-      const tempGate: Gate = {
-        id: 'temp',
-        type: gateType,
-        position: initialPosition,
-        ...(gateType === 'CNOT' ? { control, target } : { qubit }),
-        ...(['RX', 'RY', 'RZ'].includes(gateType) ? { parameter: Math.PI / 2 } : {}),
+      return {
+        kind: 'insert',
+        placement: {
+          type: source.gateType,
+          qubit: cell.row,
+          ...(ROTATION_GATES.includes(source.gateType) ? { parameter: Math.PI / 2 } : {}),
+        },
+        column: cell.column,
       };
-
-      const compacted = compactGates([...shiftedGatesForInsert, tempGate]);
-      const finalGate = compacted.find((g) => g.id === 'temp');
-      const finalPosition = finalGate ? finalGate.position : initialPosition;
-
-      const shiftedGates: { id: string; newPosition: number }[] = [];
-      compacted.forEach((compactedGate) => {
-        if (compactedGate.id === 'temp') return;
-        const originalGate = gates.find((g) => g.id === compactedGate.id);
-        if (originalGate && originalGate.position !== compactedGate.position) {
-          shiftedGates.push({
-            id: compactedGate.id,
-            newPosition: compactedGate.position,
-          });
-        }
-      });
-
-      return { initialPosition, finalPosition, shiftedGates, control, target };
     },
-    [columnCenterXs, gates, qubits, numPositions]
+    [qubits]
   );
 
-  const handleDragOver = useCallback(
-    (event: React.DragEvent, qubit: number) => {
-      event.preventDefault();
-      event.dataTransfer.dropEffect = 'copy';
+  // Drop target callbacks are registered once and read the latest values from here
+  const dropStateRef = useRef({ cellAt, resolveDrop, circuit, insertGate, moveGate });
+  useEffect(() => {
+    dropStateRef.current = { cellAt, resolveDrop, circuit, insertGate, moveGate };
+  });
 
-      let gateType: GateType | null = draggingGateType;
-      if (!gateType) {
-        const mimeType = event.dataTransfer.types.find((t) => t.startsWith('application/x-gate-'));
-        if (mimeType) {
-          gateType = mimeType.replace('application/x-gate-', '').toUpperCase() as GateType;
-          setDraggingGateType(gateType);
-        }
-      }
+  useEffect(() => {
+    let scrollRaf: number | null = null;
+    let scrollVelocity = 0;
+    let lastHover: { source: DragSource; point: DragPoint } | null = null;
 
-      // Capture values before rAF callback (event may be reused)
-      const clientX = event.clientX;
-      const currentGateType = gateType;
-
-      // Cancel any pending rAF to avoid stacking
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-      }
-
-      rafRef.current = requestAnimationFrame(() => {
-        rafRef.current = null;
-
-        if (!scrollContainerRef.current || !currentGateType) return;
-
-        // Use scroll container rect + scrollLeft for scroll-independent coordinate
-        const containerRect = scrollContainerRef.current.getBoundingClientRect();
-        const scrollLeft = scrollContainerRef.current.scrollLeft;
-        const mouseX = clientX - containerRect.left + scrollLeft;
-        const { finalPosition, shiftedGates } = calculateDropPosition(
-          mouseX,
-          qubit,
-          currentGateType
-        );
-
-        // Stability check: skip setState if position hasn't changed
-        const last = lastDropPositionRef.current;
-        if (last && last.qubit === qubit && last.position === finalPosition) {
-          return;
-        }
-
-        lastDropPositionRef.current = { qubit, position: finalPosition };
-        setDragOverQubit(qubit);
-        setDragOverPosition(finalPosition);
-        setPreviewShiftedGates(shiftedGates);
-      });
-    },
-    [draggingGateType, calculateDropPosition]
-  );
-
-  const handleDragLeave = () => {
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    lastDropPositionRef.current = null;
-    setDragOverQubit(null);
-    setDragOverPosition(null);
-    setPreviewShiftedGates([]);
-  };
-
-  const handleDragEnd = () => {
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    lastDropPositionRef.current = null;
-    setDragOverQubit(null);
-    setDragOverPosition(null);
-    setPreviewShiftedGates([]);
-    setDraggingGateType(null);
-  };
-
-  const handleDrop = (event: React.DragEvent, qubit: number) => {
-    event.preventDefault();
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    lastDropPositionRef.current = null;
-    setDragOverQubit(null);
-    setDragOverPosition(null);
-    setDraggingGateType(null);
-    setPreviewShiftedGates([]);
-
-    const gateType = event.dataTransfer.getData('gateType') as GateType;
-    if (!gateType || !scrollContainerRef.current) return;
-
-    if (gates.length >= config.maxGates) {
-      console.warn(`Maximum gate limit (${config.maxGates}) reached`);
-      return;
-    }
-
-    const containerRect = scrollContainerRef.current.getBoundingClientRect();
-    const scrollLeft = scrollContainerRef.current.scrollLeft;
-    const mouseX = event.clientX - containerRect.left + scrollLeft;
-    const { initialPosition, control, target } = calculateDropPosition(mouseX, qubit, gateType);
-
-    const targetQubits =
-      gateType === 'CNOT' && control !== undefined && target !== undefined
-        ? [control, target]
-        : [qubit];
-
-    const shiftedGates = gates.map((g) => {
-      const gateQubits = getGateQubits(g);
-      const overlapsQubit = targetQubits.some((q) => gateQubits.includes(q));
-      if (overlapsQubit && g.position >= initialPosition) {
-        return { ...g, position: g.position + 1 };
-      }
-      return g;
-    });
-
-    const newGate: Gate = {
-      id: generateGateId(),
-      type: gateType,
-      position: initialPosition,
-      ...(gateType === 'CNOT' ? { control, target } : { qubit }),
-      ...(['RX', 'RY', 'RZ'].includes(gateType) ? { parameter: Math.PI / 2 } : {}),
+    const stopAutoScroll = () => {
+      if (scrollRaf !== null) cancelAnimationFrame(scrollRaf);
+      scrollRaf = null;
+      scrollVelocity = 0;
     };
 
-    const updatedGates = compactGates([...shiftedGates, newGate]);
-    updateGates(updatedGates);
+    // Scroll horizontally while the pointer rests near the left/right edge
+    const updateAutoScroll = (point: DragPoint) => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      scrollVelocity =
+        point.x < rect.left + AUTO_SCROLL_EDGE
+          ? -AUTO_SCROLL_SPEED
+          : point.x > rect.right - AUTO_SCROLL_EDGE
+            ? AUTO_SCROLL_SPEED
+            : 0;
+      if (scrollVelocity === 0) {
+        stopAutoScroll();
+      } else if (scrollRaf === null) {
+        const step = () => {
+          container.scrollLeft += scrollVelocity;
+          if (lastHover) updatePreview(lastHover.source, lastHover.point);
+          scrollRaf = scrollVelocity === 0 ? null : requestAnimationFrame(step);
+        };
+        scrollRaf = requestAnimationFrame(step);
+      }
+    };
+
+    const updatePreview = (source: DragSource, point: DragPoint): boolean => {
+      const { cellAt, resolveDrop, circuit } = dropStateRef.current;
+      const cell = cellAt(point);
+      const drop = cell && resolveDrop(source, cell);
+      if (!cell || !drop) {
+        setPreview(null);
+        return false;
+      }
+      const key = `${cell.row}:${cell.column}`;
+      // Stability check: only recompute when the target cell changes
+      setPreview((prev) => (prev?.key === key ? prev : computePreview(key, circuit, drop)));
+      return true;
+    };
+
+    return registerDropTarget({
+      hover(source, point) {
+        lastHover = { source, point };
+        const inside = updatePreview(source, point);
+        if (inside) updateAutoScroll(point);
+        else stopAutoScroll();
+        return inside;
+      },
+      leave() {
+        lastHover = null;
+        stopAutoScroll();
+        setPreview(null);
+      },
+      drop(source, point) {
+        lastHover = null;
+        stopAutoScroll();
+        setPreview(null);
+        const { cellAt, resolveDrop, insertGate, moveGate } = dropStateRef.current;
+        const cell = cellAt(point);
+        const drop = cell && resolveDrop(source, cell);
+        if (!drop) return;
+        if (drop.kind === 'insert') {
+          insertGate(drop.placement, drop.column, { origin: 'pointer' });
+        } else {
+          moveGate(drop.gateId, drop.to, { origin: 'pointer' });
+        }
+      },
+    });
+  }, [registerDropTarget]);
+
+  // Hide selection toolbars while dragging
+  useEffect(() => {
+    if (session) {
+      setSelectedGateId(null);
+      setSelectedQubitIndex(null);
+    }
+  }, [session]);
+
+  const handleGatePointerDown = (event: React.PointerEvent, gate: Gate) => {
+    let grabOffset = 0;
+    if (gate.type === 'CNOT' && gate.control !== undefined && gate.target !== undefined) {
+      // Keep the CNOT's rows relative to the row it was grabbed by
+      const top = Math.min(gate.control, gate.target);
+      const bottom = Math.max(gate.control, gate.target);
+      const layer = gatesLayerRef.current;
+      if (layer) {
+        const row = Math.floor((event.clientY - layer.getBoundingClientRect().top) / QUBIT_HEIGHT);
+        grabOffset = Math.min(Math.max(row, top), bottom) - top;
+      }
+    }
+    beginDrag(event, { kind: 'circuit', gateId: gate.id, gateType: gate.type, grabOffset });
   };
 
   const handleGateClick = (gateId: string) => {
@@ -372,9 +367,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
   };
 
   const handleGateDelete = (gateId: string) => {
-    const remainingGates = gates.filter((g) => g.id !== gateId);
-    const compactedGates = compactGates(remainingGates);
-    updateGates(compactedGates);
+    removeGate(gateId, { origin: 'pointer' });
     setSelectedGateId(null);
   };
 
@@ -389,47 +382,80 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
   };
 
   const handleQubitAdd = () => {
-    addQubit();
+    addQubit({ origin: 'pointer' });
     setSelectedQubitIndex(null);
   };
 
   const handleQubitRemove = () => {
     if (selectedQubitIndex === null) return;
-    removeQubit(selectedQubitIndex);
+    removeQubit(selectedQubitIndex, { origin: 'pointer' });
     setSelectedQubitIndex(null);
   };
 
+  // Moving a gate with the keyboard previews the drop at the cursor
+  const keyboardPreview = useMemo(() => {
+    if (interactionState.type !== 'moving') return null;
+    return computePreview(`keyboard:${cursor.row}:${cursor.col}`, circuit, {
+      kind: 'move',
+      gateId: interactionState.gateId,
+      to: { row: cursor.row - interactionState.grabOffset, column: cursor.col },
+    });
+  }, [interactionState, cursor, circuit]);
+
+  // While dragging over the circuit, show the circuit as it would look after the drop
+  const activePreview = preview ?? keyboardPreview;
+  const displayGates = activePreview ? activePreview.gates : gates;
+  const draggedGateId = session?.source.kind === 'circuit' ? session.source.gateId : null;
+
+  const gateVariant = (gate: Gate): GateVariant => {
+    if (activePreview?.activeId === gate.id) {
+      return activePreview.kind === 'insert' ? 'insert' : 'move';
+    }
+    if (activePreview?.displacedIds.includes(gate.id)) return 'shifted';
+    if (gate.id === draggedGateId) return 'dragging';
+    return 'normal';
+  };
+
   const renderGate = (gate: Gate) => {
+    const variant = gateVariant(gate);
     const isSelected = selectedGateId === gate.id;
+    const interactive = variant === 'normal';
+    const handlers = interactive
+      ? {
+          onClick: () => handleGateClick(gate.id),
+          onPointerDown: (event: React.PointerEvent) => handleGatePointerDown(event, gate),
+        }
+      : {};
 
     if (gate.type === 'CNOT' && gate.control !== undefined && gate.target !== undefined) {
       const top = Math.min(gate.control, gate.target) * QUBIT_HEIGHT + QUBIT_HEIGHT / 2;
       const height = Math.abs(gate.target - gate.control) * QUBIT_HEIGHT;
-      const left = columnCenterXs[gate.position];
 
       return (
         <div
           key={gate.id}
-          className={`circuit-editor__cnot ${isSelected ? 'circuit-editor__cnot--selected' : ''}`}
+          className={[
+            'circuit-editor__cnot',
+            isSelected && 'circuit-editor__cnot--selected',
+            variant !== 'normal' && VARIANT_CLASS.cnot[variant],
+          ]
+            .filter(Boolean)
+            .join(' ')}
           style={{
-            left: `${left}px`,
+            left: `${columnCenterXs[gate.position]}px`,
             top: `${top}px`,
             height: `${height}px`,
           }}
-          onClick={() => handleGateClick(gate.id)}
+          {...handlers}
         >
           <div className="circuit-editor__cnot-line" />
           <div
             className="circuit-editor__cnot-control"
-            style={{
-              top: gate.control < gate.target ? '0' : '100%',
-            }}
+            style={{ top: gate.control < gate.target ? '0' : '100%' }}
           />
           <div
             className="circuit-editor__cnot-target"
-            style={{
-              top: gate.target < gate.control ? '0' : '100%',
-            }}
+            style={{ top: gate.target < gate.control ? '0' : '100%' }}
           />
         </div>
       );
@@ -437,24 +463,27 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
 
     if (gate.qubit === undefined) return null;
 
-    const isRotationGate = ['RX', 'RY', 'RZ'].includes(gate.type);
+    const isRotationGate = ROTATION_GATES.includes(gate.type);
     const parameterLabel =
       gate.parameter !== undefined ? `(${(gate.parameter / Math.PI).toFixed(2)}π)` : '';
-
-    const centerX = columnCenterXs[gate.position];
 
     return (
       <div
         key={gate.id}
-        className={`circuit-editor__gate ${
-          isSelected ? 'circuit-editor__gate--selected' : ''
-        } ${isRotationGate ? 'circuit-editor__gate--rotation' : ''}`}
+        className={[
+          'circuit-editor__gate',
+          isSelected && 'circuit-editor__gate--selected',
+          isRotationGate && 'circuit-editor__gate--rotation',
+          variant !== 'normal' && VARIANT_CLASS.gate[variant],
+        ]
+          .filter(Boolean)
+          .join(' ')}
         style={{
-          left: `${centerX}px`,
+          left: `${columnCenterXs[gate.position]}px`,
           top: `${gate.qubit * QUBIT_HEIGHT + QUBIT_HEIGHT / 2}px`,
           backgroundColor: GATE_COLORS[gate.type],
         }}
-        onClick={() => handleGateClick(gate.id)}
+        {...handlers}
       >
         <span className="circuit-editor__gate-label">
           {gate.type}
@@ -475,7 +504,7 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
   const minCircuitWidth = Math.max(nextColumnRightEdge, 400);
 
   return (
-    <div className={`circuit-editor ${className}`.trim()} onDragEnd={handleDragEnd}>
+    <div className={`circuit-editor ${className}`.trim()}>
       <div className="circuit-editor__canvas">
         {/* Fixed qubit labels - outside scroll area */}
         <div className="circuit-editor__labels">
@@ -506,13 +535,6 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
               {Array.from({ length: qubits }).map((_, qubitIndex) => (
                 <div key={qubitIndex} className="circuit-editor__lane">
                   <div className="circuit-editor__lane-line" />
-
-                  <div
-                    className="circuit-editor__drop-zone-continuous"
-                    onDragOver={(e) => handleDragOver(e, qubitIndex)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDrop(e, qubitIndex)}
-                  />
                 </div>
               ))}
 
@@ -522,14 +544,9 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
               </div>
             </div>
 
-            {/* Gates */}
-            <div className="circuit-editor__gates">
-              {gates
-                .filter((gate) => {
-                  const isBeingShifted = previewShiftedGates.some((sg) => sg.id === gate.id);
-                  return !isBeingShifted;
-                })
-                .map(renderGate)}
+            {/* Gates (or the drop preview while dragging) */}
+            <div className="circuit-editor__gates" ref={gatesLayerRef}>
+              {displayGates.map(renderGate)}
             </div>
 
             {/* Keyboard cursor overlay */}
@@ -539,131 +556,6 @@ export function CircuitEditor({ className = '' }: CircuitEditorProps = {}) {
               inputSource={inputSource}
               columnCenterXs={columnCenterXs}
             />
-
-            {/* New gate drop preview */}
-            {dragOverQubit !== null && dragOverPosition !== null && draggingGateType && (
-              <div className="circuit-editor__preview">
-                {draggingGateType === 'CNOT' ? (
-                  (() => {
-                    const control = Math.min(dragOverQubit, qubits - 2);
-                    const target = control + 1;
-                    const top = control * QUBIT_HEIGHT + QUBIT_HEIGHT / 2;
-                    const height = QUBIT_HEIGHT;
-                    return (
-                      <div
-                        className="circuit-editor__cnot circuit-editor__cnot--preview"
-                        style={{
-                          left: `${columnCenterXs[dragOverPosition]}px`,
-                          top: `${top}px`,
-                          height: `${height}px`,
-                        }}
-                      >
-                        <div className="circuit-editor__cnot-line" />
-                        <div
-                          className="circuit-editor__cnot-control"
-                          style={{ top: control < target ? '0' : '100%' }}
-                        />
-                        <div
-                          className="circuit-editor__cnot-target"
-                          style={{ top: target < control ? '0' : '100%' }}
-                        />
-                      </div>
-                    );
-                  })()
-                ) : (
-                  <div
-                    className="circuit-editor__gate circuit-editor__gate--preview"
-                    style={{
-                      left: `${columnCenterXs[dragOverPosition]}px`,
-                      top: `${dragOverQubit * QUBIT_HEIGHT + QUBIT_HEIGHT / 2}px`,
-                    }}
-                  >
-                    <span className="circuit-editor__gate-label">
-                      {draggingGateType}
-                      {['RX', 'RY', 'RZ'].includes(draggingGateType) && (
-                        <span className="circuit-editor__gate-param">(0.50π)</span>
-                      )}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Shifted gates preview */}
-            {previewShiftedGates.length > 0 && (
-              <div className="circuit-editor__preview circuit-editor__preview--shifted">
-                {previewShiftedGates.map((shiftedGate) => {
-                  const originalGate = gates.find((g) => g.id === shiftedGate.id);
-                  if (!originalGate) return null;
-
-                  if (
-                    originalGate.type === 'CNOT' &&
-                    originalGate.control !== undefined &&
-                    originalGate.target !== undefined
-                  ) {
-                    const top =
-                      Math.min(originalGate.control, originalGate.target) * QUBIT_HEIGHT +
-                      QUBIT_HEIGHT / 2;
-                    const height =
-                      Math.abs(originalGate.target - originalGate.control) * QUBIT_HEIGHT;
-                    return (
-                      <div
-                        key={shiftedGate.id}
-                        className="circuit-editor__cnot circuit-editor__cnot--shifted-preview"
-                        style={{
-                          left: `${columnCenterXs[shiftedGate.newPosition]}px`,
-                          top: `${top}px`,
-                          height: `${height}px`,
-                        }}
-                      >
-                        <div className="circuit-editor__cnot-line" />
-                        <div
-                          className="circuit-editor__cnot-control"
-                          style={{
-                            top: originalGate.control < originalGate.target ? '0' : '100%',
-                          }}
-                        />
-                        <div
-                          className="circuit-editor__cnot-target"
-                          style={{
-                            top: originalGate.target < originalGate.control ? '0' : '100%',
-                          }}
-                        />
-                      </div>
-                    );
-                  }
-
-                  if (originalGate.qubit === undefined) return null;
-
-                  const isRotationGate = ['RX', 'RY', 'RZ'].includes(originalGate.type);
-                  const parameterLabel =
-                    originalGate.parameter !== undefined
-                      ? `(${(originalGate.parameter / Math.PI).toFixed(2)}π)`
-                      : '';
-
-                  return (
-                    <div
-                      key={shiftedGate.id}
-                      className={`circuit-editor__gate circuit-editor__gate--shifted-preview ${
-                        isRotationGate ? 'circuit-editor__gate--rotation' : ''
-                      }`}
-                      style={{
-                        left: `${columnCenterXs[shiftedGate.newPosition]}px`,
-                        top: `${originalGate.qubit * QUBIT_HEIGHT + QUBIT_HEIGHT / 2}px`,
-                        backgroundColor: GATE_COLORS[originalGate.type],
-                      }}
-                    >
-                      <span className="circuit-editor__gate-label">
-                        {originalGate.type}
-                        {isRotationGate && originalGate.parameter !== undefined && (
-                          <span className="circuit-editor__gate-param">{parameterLabel}</span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
 
             {/* Gate Toolbar */}
             {selectedGate && (

@@ -1,17 +1,8 @@
 import type { CursorPosition, InteractionState, InputSource } from '../../keyboard/types';
 import './CursorOverlay.scss';
+import { GATE_COLORS } from '../gateColors';
 
 const QUBIT_HEIGHT = 80;
-const GATE_COLORS: Record<string, string> = {
-  H: '#fa4d56',
-  X: '#002d9c',
-  Y: '#9f1853',
-  Z: '#33b1ff',
-  RX: '#9f1853',
-  RY: '#9f1853',
-  RZ: '#33b1ff',
-};
-
 export interface CursorOverlayProps {
   cursor: CursorPosition;
   interactionState: InteractionState;
@@ -37,7 +28,9 @@ export function CursorOverlay({
         ? 'cursor-overlay--cnot-control'
         : interactionState.type === 'cnot_target'
           ? 'cursor-overlay--cnot-target'
-          : 'cursor-overlay--idle';
+          : interactionState.type === 'moving'
+            ? 'cursor-overlay--moving'
+            : 'cursor-overlay--idle';
 
   return (
     <>

@@ -80,6 +80,18 @@ export type {
   SimulationStartEvent,
   SimulationErrorEvent,
   SimulationSource,
+  AdapterStatus,
+  ResultChangeEvent,
+  ResultChangeReason,
+  CircuitEditEvent,
+  CircuitChanges,
+  CircuitEditSummary,
+  CircuitEditAction,
+  EditOrigin,
+  EditOptions,
+  GatePlacement,
+  CellPosition,
+  Displacement,
   QSpherePoint,
   SimulationAdapter,
   // Provider types
@@ -92,6 +104,8 @@ export type {
 // =============================================================================
 // UTILITIES - Helper functions
 // =============================================================================
+export { diffCircuits } from './circuit/diff';
+
 export {
   circuitToQasm,
   qasmToCircuit,

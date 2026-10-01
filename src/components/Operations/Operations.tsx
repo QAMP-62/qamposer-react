@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQamposer } from '../../hooks/useQamposer';
 import type { GateType, Gate, GateInfo } from '../../types';
 import './Operations.scss';
+import { useGateDrag } from '../../dnd/GateDragContext';
 
 const GATE_DEFINITIONS: GateInfo[] = [
   { type: 'H', label: 'H', description: 'Hadamard', category: 'single', color: '#fa4d56' },
@@ -32,7 +33,7 @@ export function Operations({ className = '' }: OperationsProps = {}) {
     return (
       <GateEditor
         gate={editingGate}
-        onUpdate={updateGate}
+        onUpdate={(gateId, updates) => updateGate(gateId, updates, { origin: 'pointer' })}
         onClose={() => setEditingGate(null)}
         className={className}
       />
@@ -52,15 +53,12 @@ function GateLibrary({ className = '' }: { className?: string }) {
     multi: false,
   });
 
-  const handleDragStart = (event: React.DragEvent, gateType: GateType) => {
+  const { beginDrag } = useGateDrag();
+
+  const handlePointerDown = (event: React.PointerEvent, gateType: GateType) => {
     // Prevent CNOT drag when only 1 qubit
-    if (gateType === 'CNOT' && !canUseCnot) {
-      event.preventDefault();
-      return;
-    }
-    event.dataTransfer.setData('gateType', gateType);
-    event.dataTransfer.setData(`application/x-gate-${gateType.toLowerCase()}`, '');
-    event.dataTransfer.effectAllowed = 'copy';
+    if (gateType === 'CNOT' && !canUseCnot) return;
+    beginDrag(event, { kind: 'palette', gateType });
   };
 
   const toggleSection = (section: string) => {
@@ -77,8 +75,7 @@ function GateLibrary({ className = '' }: { className?: string }) {
         <div
           key={gate.type}
           className={`operations__gate operations__gate--cnot ${isDisabled ? 'operations__gate--disabled' : ''}`}
-          draggable={!isDisabled}
-          onDragStart={(e) => handleDragStart(e, gate.type)}
+          onPointerDown={(e) => handlePointerDown(e, gate.type)}
           title={isDisabled ? 'CNOT requires at least 2 qubits' : gate.description}
         >
           <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
@@ -103,8 +100,7 @@ function GateLibrary({ className = '' }: { className?: string }) {
       <div
         key={gate.type}
         className="operations__gate"
-        draggable
-        onDragStart={(e) => handleDragStart(e, gate.type)}
+        onPointerDown={(e) => handlePointerDown(e, gate.type)}
         style={{ backgroundColor: gate.color }}
         title={gate.description}
       >
@@ -163,6 +159,9 @@ function GateEditor({ gate, onUpdate, onClose, className = '' }: GateEditorProps
 
   // Rotation gate state
   const [parameterValue, setParameterValue] = useState('');
+  // The displayed value is rounded (e.g. 1.2346), so only save text the user has
+  // actually edited; saving the display as-is would overwrite the exact angle
+  const parameterEdited = useRef(false);
 
   // CNOT gate state
   const [controlQubit, setControlQubit] = useState(gate.control ?? 0);
@@ -185,7 +184,8 @@ function GateEditor({ gate, onUpdate, onClose, className = '' }: GateEditorProps
     } else {
       setParameterValue('0');
     }
-  }, [gate.parameter]);
+    parameterEdited.current = false;
+  }, [gate.id, gate.parameter]);
 
   // Initialize CNOT qubits
   useEffect(() => {
@@ -203,6 +203,8 @@ function GateEditor({ gate, onUpdate, onClose, className = '' }: GateEditorProps
   }
 
   const handleRotationSave = () => {
+    if (!parameterEdited.current) return;
+    parameterEdited.current = false;
     let radians = 0;
     try {
       const normalized = parameterValue.toLowerCase().replace(/\s/g, '');
@@ -250,7 +252,10 @@ function GateEditor({ gate, onUpdate, onClose, className = '' }: GateEditorProps
               type="text"
               className="operations__input"
               value={parameterValue}
-              onChange={(e) => setParameterValue(e.target.value)}
+              onChange={(e) => {
+                parameterEdited.current = true;
+                setParameterValue(e.target.value);
+              }}
               onBlur={handleRotationSave}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleRotationSave();

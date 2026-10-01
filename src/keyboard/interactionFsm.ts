@@ -6,20 +6,23 @@ import type {
   GridBounds,
   FsmResult,
   CircuitCommand,
+  GateAtCell,
 } from './types';
 
 /**
  * Pure FSM transition function.
  * No external dependencies — fully unit-testable.
  *
- * Takes current state, cursor, action, and grid bounds.
+ * Takes current state, cursor, action, grid bounds, and a lookup of the gate
+ * under a cell (used to pick up placed gates for moving).
  * Returns next state, new cursor position, and optional circuit command.
  */
 export function interactionFsm(
   state: InteractionState,
   cursor: CursorPosition,
   action: InteractionAction,
-  bounds: GridBounds
+  bounds: GridBounds,
+  gateAt: (row: number, col: number) => GateAtCell | null = () => null
 ): FsmResult {
   // --- Global actions (handled regardless of state) ---
 
@@ -63,14 +66,17 @@ export function interactionFsm(
         : (currentIndex + action.direction + len) % len;
     const gateType = GATE_CYCLE_ORDER[nextIndex];
     // Recurse with resolved SELECT_GATE
-    return interactionFsm(state, cursor, { type: 'SELECT_GATE', gateType }, bounds);
+    return interactionFsm(state, cursor, { type: 'SELECT_GATE', gateType }, bounds, gateAt);
   }
 
   // --- State-specific transitions ---
 
   switch (state.type) {
     case 'idle':
-      return idleTransition(state, cursor, action);
+      return idleTransition(state, cursor, action, gateAt);
+
+    case 'moving':
+      return movingTransition(state, cursor, action);
 
     case 'placing':
       return placingTransition(state, cursor, action, bounds);
@@ -86,7 +92,8 @@ export function interactionFsm(
 function idleTransition(
   state: InteractionState,
   cursor: CursorPosition,
-  action: InteractionAction
+  action: InteractionAction,
+  gateAt: (row: number, col: number) => GateAtCell | null
 ): FsmResult {
   if (action.type === 'SELECT_GATE') {
     if (action.gateType === 'CNOT') {
@@ -99,7 +106,41 @@ function idleTransition(
     };
   }
 
-  // ACTIVATE_CELL in idle does nothing
+  // ACTIVATE_CELL on a placed gate picks it up for moving
+  if (action.type === 'ACTIVATE_CELL') {
+    const gate = gateAt(cursor.row, cursor.col);
+    if (gate) {
+      return {
+        state: { type: 'moving', gateId: gate.gateId, grabOffset: gate.grabOffset },
+        cursor,
+        command: null,
+      };
+    }
+  }
+
+  return { state, cursor, command: null };
+}
+
+function movingTransition(
+  state: Extract<InteractionState, { type: 'moving' }>,
+  cursor: CursorPosition,
+  action: InteractionAction
+): FsmResult {
+  // Choosing a gate abandons the move and starts placing instead
+  if (action.type === 'SELECT_GATE') {
+    return idleTransition({ type: 'idle' }, cursor, action, () => null);
+  }
+
+  if (action.type === 'ACTIVATE_CELL') {
+    const command: CircuitCommand = {
+      type: 'MOVE_GATE',
+      gateId: state.gateId,
+      row: cursor.row - state.grabOffset,
+      col: cursor.col,
+    };
+    return { state: { type: 'idle' }, cursor, command };
+  }
+
   return { state, cursor, command: null };
 }
 
