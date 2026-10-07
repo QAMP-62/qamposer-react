@@ -11,6 +11,7 @@ import { QamposerContext } from './QamposerContext';
 import { circuitToQasm, qasmToCircuit } from '../utils/openqasm';
 import * as ops from '../circuit/operations';
 import { useCircuitHistory } from './useCircuitHistory';
+import { useHardwareJob } from './useHardwareJob';
 import { diffCircuits, reconcileGateIds } from '../circuit/diff';
 import { GateDragProvider } from '../dnd/GateDragContext';
 import { noopAdapter } from '../adapters/noop';
@@ -73,6 +74,7 @@ export function QamposerProvider({
   onSimulationComplete,
   onSimulationError,
   onResultChange,
+  onHardwareJobChange,
   config: userConfig,
   children,
 }: QamposerProviderProps) {
@@ -97,6 +99,7 @@ export function QamposerProvider({
     onSimulationComplete,
     onSimulationError,
     onResultChange,
+    onHardwareJobChange,
   });
   const adapterRef = useLatestRef(adapter);
   // Auto-simulation uses realtimeAdapter if provided, otherwise the main adapter
@@ -592,10 +595,30 @@ export function QamposerProvider({
     return circuitToQasm(circuit);
   }, []);
 
+  // === Real hardware ===
+
+  const {
+    hardwareJob,
+    submitHardwareJob,
+    cancelHardwareJob,
+    refreshHardwareJob,
+    dismissHardwareJob,
+  } = useHardwareJob({
+    adapterRef,
+    hasHardware: Boolean(adapter.hardware),
+    circuitRef,
+    maxShots: config.maxShots,
+    callbacksRef,
+    applyResult,
+  });
+
   // === Simulation ===
 
   const simulate = useCallback(
     async (shots: number = 1024, profile?: SimulationProfile): Promise<SimulationResult> => {
+      if (profile?.type === 'real') {
+        throw new Error('Real hardware jobs are queued, not simulated: use submitHardwareJob()');
+      }
       // Simulate the circuit as it is now, even if the availability check below takes a while
       const circuit = circuitRef.current;
       if (circuit.gates.length === 0) {
@@ -679,6 +702,13 @@ export function QamposerProvider({
       canSimulate,
       adapterStatus,
 
+      // Real hardware
+      hardwareJob,
+      submitHardwareJob,
+      cancelHardwareJob,
+      refreshHardwareJob,
+      dismissHardwareJob,
+
       // Adapter
       adapter,
 
@@ -716,6 +746,11 @@ export function QamposerProvider({
       simulate,
       canSimulate,
       adapterStatus,
+      hardwareJob,
+      submitHardwareJob,
+      cancelHardwareJob,
+      refreshHardwareJob,
+      dismissHardwareJob,
       adapter,
       config,
     ]

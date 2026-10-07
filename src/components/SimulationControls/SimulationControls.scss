@@ -353,3 +353,87 @@
     transform: rotate(360deg);
   }
 }
+
+// === Real hardware ===
+
+.simulation-controls__hardware,
+.simulation-controls__hardware-connect {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.simulation-controls__hardware-session {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--qamposer-text-primary, #f4f4f4);
+}
+
+.simulation-controls__hardware-note {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--qamposer-text-secondary, #a8a8a8);
+
+  a {
+    color: var(--qamposer-accent, #4285f4);
+  }
+}
+
+.simulation-controls__hardware-error {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #fa4d56;
+}
+
+.simulation-controls__hardware-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--qamposer-text-primary, #f4f4f4);
+  cursor: pointer;
+
+  input {
+    margin-top: 0.15rem;
+  }
+}
+
+.simulation-controls__link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--qamposer-accent, #4285f4);
+  font-size: 0.75rem;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.simulation-controls__job {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.5rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--qamposer-border, #525252);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--qamposer-text-primary, #f4f4f4);
+
+  &--done {
+    border-color: #24a148;
+  }
+
+  &--error,
+  &--cancelled {
+    border-color: #da1e28;
+  }
+}

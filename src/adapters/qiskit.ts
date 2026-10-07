@@ -4,6 +4,7 @@
 
 import type { SimulationAdapter, CircuitRequest, SimulationResult, BackendInfo } from '../types';
 import type { QiskitAdapterConfig } from './types';
+import { ibmHardware } from './ibmHardware';
 
 /**
  * Create a simulation adapter for Qiskit backend
@@ -25,10 +26,12 @@ export function qiskitAdapter(configOrUrl: string | QiskitAdapterConfig): Simula
   const config: QiskitAdapterConfig =
     typeof configOrUrl === 'string' ? { baseUrl: configOrUrl } : configOrUrl;
 
-  const { baseUrl, headers = {}, timeout = 30000 } = config;
+  const { baseUrl, headers = {}, timeout = 30000, hardware = false } = config;
 
   return {
     name: 'Qiskit Simulator',
+
+    ...(hardware ? { hardware: ibmHardware(baseUrl, timeout) } : {}),
 
     async simulate(request: CircuitRequest): Promise<SimulationResult> {
       const controller = new AbortController();

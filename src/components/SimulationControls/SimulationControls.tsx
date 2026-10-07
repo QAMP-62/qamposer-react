@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQamposer } from '../../hooks/useQamposer';
+import { HardwarePanel } from './HardwarePanel';
+import { HardwareJobStatus } from './HardwareJobStatus';
+import { isFinalStatus } from '../../context/useHardwareJob';
 import type { BackendInfo, SimulationProfile } from '../../types';
 import './SimulationControls.scss';
 
@@ -50,7 +53,9 @@ export function SimulationControls({
   buttonLabel = 'Set up and run',
   className = '',
 }: SimulationControlsProps) {
-  const { simulate, status, circuit, adapter, adapterStatus } = useQamposer();
+  const { simulate, status, circuit, adapter, adapterStatus, submitHardwareJob, hardwareJob } =
+    useQamposer();
+  const hardware = adapter.hardware;
   const isSimulating = status === 'simulating';
   const isConnecting = adapterStatus === 'checking';
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -64,6 +69,13 @@ export function SimulationControls({
   const [isLoadingBackends, setIsLoadingBackends] = useState(false);
   const [backendError, setBackendError] = useState(false);
 
+  // Real hardware selection (Step 3)
+  const [hardwareDevice, setHardwareDevice] = useState<string | null>(null);
+  const [hardwareConfirmed, setHardwareConfirmed] = useState(false);
+  // Opened from the job's Reconnect button: start on the real-hardware entry
+  const [preferHardware, setPreferHardware] = useState(false);
+  const hardwareJobActive = hardwareJob ? !isFinalStatus(hardwareJob.status) : false;
+
   // Load backends when dialog opens (ideal is excluded since it runs automatically)
   useEffect(() => {
     if (isDialogOpen && adapter.getBackends) {
@@ -76,15 +88,19 @@ export function SimulationControls({
           const fakeBackends = result.filter((b) => b.backend_type === 'noisy_fake');
           const realHardwareEntry: BackendInfo = {
             id: 'real_hardware',
-            name: 'Real Hardware',
+            name: hardware ? `${hardware.name} (real hardware)` : 'Real Hardware',
             num_qubits: 0,
             backend_type: 'real',
-            description: 'Coming soon',
+            description: hardware
+              ? 'Runs on a real quantum computer with your own account (uses your QPU time)'
+              : 'Coming soon',
           };
           setBackends([...fakeBackends, realHardwareEntry]);
 
-          // Auto-select first fake backend
-          if (fakeBackends.length > 0) {
+          // Auto-select first fake backend (or real hardware when reconnecting)
+          if (preferHardware && hardware) {
+            setSelectedBackendId(realHardwareEntry.id);
+          } else if (fakeBackends.length > 0) {
             setSelectedBackendId(fakeBackends[0].id);
           }
 
@@ -95,10 +111,12 @@ export function SimulationControls({
         .catch(() => setBackendError(true))
         .finally(() => setIsLoadingBackends(false));
     }
-  }, [isDialogOpen, adapter, adapterStatus]);
+  }, [isDialogOpen, adapter, adapterStatus, hardware, preferHardware]);
 
-  const openDialog = () => {
+  const openDialog = (options: { hardware?: boolean } = {}) => {
     setRunError(null);
+    setHardwareConfirmed(false);
+    setPreferHardware(options.hardware ?? false);
     setIsDialogOpen(true);
   };
 
@@ -115,6 +133,9 @@ export function SimulationControls({
   };
 
   const selectedBackend = backends.find((b) => b.id === selectedBackendId);
+  const isRealSelected = selectedBackend?.backend_type === 'real';
+  const canSubmitHardware =
+    Boolean(hardwareDevice) && hardwareConfirmed && !hardwareJobActive && !isSimulating;
 
   const buildProfile = (): SimulationProfile | undefined => {
     if (!selectedBackend || selectedBackend.backend_type === 'noisy_fake') {
@@ -126,6 +147,18 @@ export function SimulationControls({
   const handleRun = async () => {
     if (circuit.gates.length === 0) {
       alert('Please add gates to the circuit before running simulation');
+      return;
+    }
+
+    if (isRealSelected) {
+      if (!hardwareDevice) return;
+      setRunError(null);
+      try {
+        await submitHardwareJob({ backend: hardwareDevice, shots });
+        setIsDialogOpen(false);
+      } catch (err) {
+        setRunError(err instanceof Error ? err.message : String(err));
+      }
       return;
     }
 
@@ -161,12 +194,14 @@ export function SimulationControls({
     <>
       <button
         className={`simulation-controls__run-btn simulation-controls__run-btn--primary ${className}`.trim()}
-        onClick={openDialog}
+        onClick={() => openDialog()}
         disabled={isSimulating}
       >
         <PlayIcon />
         <span>{buttonLabel}</span>
       </button>
+
+      {hardwareJob && <HardwareJobStatus onReconnect={() => openDialog({ hardware: true })} />}
 
       {isDialogOpen && (
         <div className="simulation-controls__overlay" onClick={() => setIsDialogOpen(false)}>
@@ -228,9 +263,9 @@ export function SimulationControls({
                             selectedBackendId === backend.id
                               ? 'simulation-controls__backend-item--selected'
                               : ''
-                          } ${isReal ? 'simulation-controls__backend-item--disabled' : ''}`}
-                          onClick={() => !isReal && setSelectedBackendId(backend.id)}
-                          disabled={isReal}
+                          } ${isReal && !hardware ? 'simulation-controls__backend-item--disabled' : ''}`}
+                          onClick={() => (!isReal || hardware) && setSelectedBackendId(backend.id)}
+                          disabled={isReal && !hardware}
                         >
                           <div className="simulation-controls__backend-item-content">
                             <div className="simulation-controls__backend-item-header">
@@ -244,9 +279,7 @@ export function SimulationControls({
                               </span>
                             </div>
                             <p className="simulation-controls__backend-desc">
-                              {isReal
-                                ? 'Coming soon'
-                                : backend.description || `${backend.num_qubits} qubits`}
+                              {backend.description || `${backend.num_qubits} qubits`}
                             </p>
                           </div>
                           {selectedBackendId === backend.id && (
@@ -260,6 +293,21 @@ export function SimulationControls({
                   </div>
                 )}
               </div>
+
+              {isRealSelected && hardware && (
+                <div className="simulation-controls__section">
+                  <h3>Step 3: Connect and choose a device</h3>
+                  <HardwarePanel
+                    hardware={hardware}
+                    minQubits={circuit.qubits}
+                    selectedDevice={hardwareDevice}
+                    onSelectDevice={setHardwareDevice}
+                    confirmed={hardwareConfirmed}
+                    onConfirmChange={setHardwareConfirmed}
+                    jobActive={hardwareJobActive}
+                  />
+                </div>
+              )}
 
               {runError && (
                 <div
@@ -286,13 +334,20 @@ export function SimulationControls({
               <button
                 className="simulation-controls__btn simulation-controls__btn--primary"
                 onClick={handleRun}
-                disabled={isSimulating || isConnecting || backendError}
+                disabled={
+                  isSimulating ||
+                  isConnecting ||
+                  backendError ||
+                  (isRealSelected && !canSubmitHardware)
+                }
               >
                 {isSimulating || isConnecting ? (
                   <>
                     <LoadingSpinner />
                     <span>{isSimulating ? 'Running...' : 'Connecting...'}</span>
                   </>
+                ) : isRealSelected ? (
+                  'Submit job'
                 ) : (
                   'Run circuit'
                 )}

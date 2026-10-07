@@ -179,8 +179,9 @@ export interface SimulationResult {
  * What triggered a simulation
  * - 'realtime': automatic ideal simulation on circuit change (realtimeAdapter)
  * - 'run': explicit simulate() call, e.g. "Set up and run" (adapter)
+ * - 'hardware': a job on a real quantum computer (submitHardwareJob)
  */
-export type SimulationSource = 'realtime' | 'run';
+export type SimulationSource = 'realtime' | 'run' | 'hardware';
 
 /**
  * Event passed to onSimulationStart callback
@@ -291,6 +292,8 @@ export interface QamposerProviderProps {
    * Use this to mirror `result`; onSimulationComplete only reports completed runs.
    */
   onResultChange?: (event: ResultChangeEvent) => void;
+  /** Callback whenever the tracked hardware job changes (submitted, status, result, cleared) */
+  onHardwareJobChange?: (job: HardwareJob | null) => void;
   /** Configuration options */
   config?: QamposerConfig;
   children: React.ReactNode;
@@ -309,6 +312,75 @@ export interface SimulationAdapter {
   isAvailable(): Promise<boolean>;
   /** Get available backends (optional) */
   getBackends?(): Promise<BackendInfo[]>;
+  /** Access to real quantum hardware (optional, e.g. qiskitAdapter({ hardware: true })) */
+  hardware?: HardwareProvider;
+}
+
+// ============================================================================
+// Real Hardware Types
+// ============================================================================
+
+export type HardwareJobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled';
+
+/** A connection to the hardware provider. Never contains the API key. */
+export interface HardwareSession {
+  /** Provider instance (e.g. IBM Cloud CRN) the session runs on */
+  instance: string | null;
+  /** When the session ends and the key must be entered again (ISO 8601) */
+  expiresAt: string;
+}
+
+export interface HardwareDevice {
+  name: string;
+  numQubits: number;
+  /** Jobs waiting in the device's queue */
+  pendingJobs: number;
+  operational: boolean;
+}
+
+export interface HardwareUsage {
+  /** QPU seconds left in the current period (null when unlimited or unknown) */
+  remainingSeconds: number | null;
+  consumedSeconds: number | null;
+  limitReached: boolean;
+}
+
+/** A job as reported by the provider */
+export interface HardwareJobInfo {
+  id: string;
+  backend: string;
+  status: HardwareJobStatus;
+  /** Present when status is 'done' (execution_time is QPU seconds) */
+  result?: SimulationResult;
+  error?: string;
+}
+
+/**
+ * Real-hardware operations. Credentials are exchanged for a server-side session in
+ * connect(); implementations must not keep the API key afterwards.
+ */
+export interface HardwareProvider {
+  /** Display name, e.g. 'IBM Quantum' */
+  name: string;
+  getSession(): Promise<HardwareSession | null>;
+  connect(credentials: { apiKey: string; instance?: string }): Promise<HardwareSession>;
+  disconnect(): Promise<void>;
+  listDevices(minQubits: number): Promise<HardwareDevice[]>;
+  getUsage(): Promise<HardwareUsage>;
+  submit(request: CircuitRequest & { backend_name: string }): Promise<HardwareJobInfo>;
+  getJob(id: string): Promise<HardwareJobInfo>;
+  cancel(id: string): Promise<void>;
+}
+
+/** The hardware job tracked by the provider (persists across page reloads) */
+export interface HardwareJob extends HardwareJobInfo {
+  /** Circuit the job runs (results only replace the display while it is unchanged) */
+  circuit: Circuit;
+  shots: number;
+  /** ISO 8601 */
+  submittedAt: string;
+  /** Polling stopped because the session ended; reconnect, then refreshHardwareJob() */
+  needsReconnect?: boolean;
 }
 
 // ============================================================================
@@ -374,6 +446,17 @@ export interface QamposerContextValue {
    * re-checks once when 'unavailable' (the backend may have started since).
    */
   adapterStatus: AdapterStatus;
+
+  // Real hardware (requires adapter.hardware)
+  /** The tracked hardware job, or null. Survives page reloads within the tab */
+  hardwareJob: HardwareJob | null;
+  /** Submit the current circuit to a device. Only one job is tracked at a time */
+  submitHardwareJob: (options: { backend: string; shots?: number }) => Promise<HardwareJob>;
+  cancelHardwareJob: () => Promise<void>;
+  /** Poll the tracked job now (e.g. after reconnecting) */
+  refreshHardwareJob: () => Promise<void>;
+  /** Stop tracking a finished job */
+  dismissHardwareJob: () => void;
 
   // Adapter
   adapter: SimulationAdapter;

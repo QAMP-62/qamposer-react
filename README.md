@@ -147,15 +147,15 @@ import { qiskitAdapter, localAdapter } from '@qamposer/react';
 
 ### With Backend (Simulation)
 
-Noisy fake-device simulation (and any future real-hardware path) requires the backend. Start it and pass the `qiskitAdapter`:
+Noisy fake-device simulation and [real hardware](#real-hardware-ibm-quantum) require the backend. Start it and pass the `qiskitAdapter`:
 
 Assuming localhost is used here, but please specify the actual deployment destination for the backend.
 
 ```bash
 # Clone and setup qamposer-backend
 cd qamposer-backend
-poetry install
-poetry run uvicorn backend.main:app --host 0.0.0.0 --port 8080 --reload
+uv sync
+uv run uvicorn backend.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 ```tsx
@@ -189,6 +189,7 @@ interface QamposerProps {
   onSimulationComplete?: (event: SimulationCompleteEvent) => void;
   onSimulationError?: (event: SimulationErrorEvent) => void;
   onResultChange?: (event: ResultChangeEvent) => void; // Result shown or cleared
+  onHardwareJobChange?: (job: HardwareJob | null) => void; // Real-hardware job updates
 
   // Configuration
   config?: QamposerConfig;
@@ -220,7 +221,7 @@ interface QamposerConfig {
 
 ### Simulation Events
 
-Every simulation event carries `circuit`, `qasm`, and `source`: `'realtime'` for the automatic simulation on each edit, `'run'` for an explicit `simulate()` call (e.g. "Set up and run").
+Every simulation event carries `circuit`, `qasm`, and `source`: `'realtime'` for the automatic simulation on each edit, `'run'` for an explicit `simulate()` call (e.g. "Set up and run"), and `'hardware'` for a [real-hardware job](#real-hardware-ibm-quantum).
 
 ```tsx
 <QamposerMicro
@@ -275,6 +276,48 @@ function RunButton() {
 }
 ```
 
+### Real Hardware (IBM Quantum)
+
+Circuits can run on IBM Quantum's real devices. Each user connects with **their own** IBM Quantum API key; jobs and QPU time are billed to their account. Enable it on the adapter (requires qamposer-backend with the `/api/ibm` endpoints):
+
+```tsx
+<Qamposer
+  adapter={qiskitAdapter({ baseUrl: 'https://api.example.com', hardware: true })}
+  realtimeAdapter={localAdapter()}
+/>
+```
+
+In "Set up and run", users pick **IBM Quantum (real hardware)**, connect with their API key, choose a device (sorted by queue length), confirm that the job uses their QPU time, and submit. A status chip next to the button shows the job (queued / running, elapsed time, Cancel). Real devices are queued and can take minutes to hours, so jobs are polled in the background (5 s → 10 s → 30 s, slower in hidden tabs) and resumed after a page reload. The result replaces the display (`resultSource: 'hardware'`) only if the circuit is unchanged since submitting; otherwise it stays in `hardwareJob.result`.
+
+**How the API key is handled**
+
+| Where   | What happens                                                                                                                                                                            |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Browser | The key exists only in the password field until it is submitted, then the field is cleared. It is never stored (no localStorage / sessionStorage), never put in context, events or URLs |
+| Network | Sent once over HTTPS in the body of `POST /api/ibm/session`                                                                                                                             |
+| Server  | Validated with IBM (no QPU time used), encrypted with AES-256-GCM and kept for the session only (2 hours by default). Never logged or returned                                          |
+| Session | The browser holds an opaque id in an `HttpOnly; Secure; SameSite=Strict` cookie that scripts cannot read. "Disconnect" deletes the server-side copy                                     |
+
+**Requirements and recommendations**
+
+- **Same site:** the session is a cookie, so the backend must be on the same site as the page (e.g. `example.com` + `api.example.com`) and served over HTTPS. Embeds on other sites (e.g. `*.github.io` with a backend elsewhere) cannot use real hardware.
+- **Least-privilege keys:** ask users to create an API key for an IBM Cloud **service ID** that can only access their Qiskit Runtime instance, rather than their personal account key. They can revoke it in IBM Cloud at any time.
+- **Content Security Policy:** on the hosting page, restrict `connect-src` to your backend to limit what injected scripts could reach.
+- The backend limits job size and frequency (shots, one active job per session, rate limits); see qamposer-backend's `.env.example`.
+
+Programmatic use goes through the same API:
+
+```tsx
+const { adapter, hardwareJob, submitHardwareJob, cancelHardwareJob } = useQamposer();
+
+await adapter.hardware?.connect({ apiKey }); // the key is not kept after this call
+const devices = await adapter.hardware?.listDevices(circuit.qubits);
+await submitHardwareJob({ backend: devices[0].name, shots: 1024 });
+// hardwareJob: { id, backend, status: 'queued' | 'running' | 'done' | 'error' | 'cancelled', result?, needsReconnect? }
+```
+
+If the session expires while a job is running, `hardwareJob.needsReconnect` becomes `true`. After the user connects again with the same key, `refreshHardwareJob()` picks the job up again.
+
 ### Controlling a Preset from Your App
 
 Wrap a preset in your own `QamposerProvider` and use `useQamposer()` anywhere inside it. The preset uses the outer provider instead of creating its own, so your components share its state (`circuit`, `result`, `resultSource`, `status`, `error`) and actions (`setCircuit`, `importQasm`, `simulate`, `clearCircuit`, `addGate`, ...).
@@ -325,7 +368,7 @@ Available anywhere inside a `QamposerProvider` (including inside the presets). E
 | --------------- | ------------------------------------------------------------------------------------------------ |
 | `circuit`       | Current circuit                                                                                  |
 | `result`        | Displayed simulation result, or `null`                                                           |
-| `resultSource`  | What produced `result`: `'realtime'` or `'run'` (`null` without a result)                        |
+| `resultSource`  | What produced `result`: `'realtime'`, `'run'` or `'hardware'` (`null` without a result)          |
 | `status`        | `'idle' \| 'simulating' \| 'error'`                                                              |
 | `error`         | Last simulation error, or `null`                                                                 |
 | `qasmCode`      | Text shown in the code editor                                                                    |
@@ -335,27 +378,31 @@ Available anywhere inside a `QamposerProvider` (including inside the presets). E
 | `canRedo`       | Whether `redo()` has something to redo                                                           |
 | `canSimulate`   | `adapterStatus === 'available'`                                                                  |
 | `adapterStatus` | `'checking' \| 'available' \| 'unavailable'` (see [Adapter Availability](#adapter-availability)) |
+| `hardwareJob`   | The tracked real-hardware job, or `null` (see [Real Hardware](#real-hardware-ibm-quantum))       |
 | `adapter`       | The main adapter                                                                                 |
 | `config`        | Resolved `QamposerConfig` (defaults filled in)                                                   |
 
-| Action                               | Description                                                                                 |
-| ------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `setCircuit(circuit)`                | Replace the whole circuit (your gate ids are kept)                                          |
-| `insertGate(placement, column)`      | Insert a gate, pushing overlapping gates right. Returns the new id (`null` at `maxGates`)   |
-| `moveGate(gateId, { row, column })`  | Move a placed gate. For CNOT, `row` is the top-most row. Returns `false` if nothing changed |
-| `addGate(gate)`                      | Add a gate at its own `position` without shifting. Returns the new id                       |
-| `removeGate(id)`                     | Remove a gate and left-compact the rest                                                     |
-| `updateGate(id, updates)`            | Change a gate's parameter or CNOT qubits (no-op if nothing changes)                         |
-| `updateGates(gates)`                 | Replace all gates at once                                                                   |
-| `setQubits(count)`                   | Set the qubit count (clamped to `1..maxQubits`)                                             |
-| `addQubit()` / `removeQubit(index?)` | Add a qubit / remove one (and the gates on it; default: the last qubit)                     |
-| `clearCircuit()`                     | Remove all gates                                                                            |
-| `undo()` / `redo()`                  | Step through the shared edit history                                                        |
-| `importQasm(code)`                   | Load OpenQASM as a new circuit. Returns the parse result                                    |
-| `setQasmCode(code)`                  | Edit as if typed in the code editor (keeps ids of untouched gates)                          |
-| `exportQasm()`                       | Current circuit as OpenQASM                                                                 |
-| `setEditingGate(gate)`               | Open (`gate`) or close (`null`) the gate editor                                             |
-| `simulate(shots?, profile?)`         | Run on the main adapter (see [Adapter Availability](#adapter-availability))                 |
+| Action                                         | Description                                                                                  |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `setCircuit(circuit)`                          | Replace the whole circuit (your gate ids are kept)                                           |
+| `insertGate(placement, column)`                | Insert a gate, pushing overlapping gates right. Returns the new id (`null` at `maxGates`)    |
+| `moveGate(gateId, { row, column })`            | Move a placed gate. For CNOT, `row` is the top-most row. Returns `false` if nothing changed  |
+| `addGate(gate)`                                | Add a gate at its own `position` without shifting. Returns the new id                        |
+| `removeGate(id)`                               | Remove a gate and left-compact the rest                                                      |
+| `updateGate(id, updates)`                      | Change a gate's parameter or CNOT qubits (no-op if nothing changes)                          |
+| `updateGates(gates)`                           | Replace all gates at once                                                                    |
+| `setQubits(count)`                             | Set the qubit count (clamped to `1..maxQubits`)                                              |
+| `addQubit()` / `removeQubit(index?)`           | Add a qubit / remove one (and the gates on it; default: the last qubit)                      |
+| `clearCircuit()`                               | Remove all gates                                                                             |
+| `undo()` / `redo()`                            | Step through the shared edit history                                                         |
+| `importQasm(code)`                             | Load OpenQASM as a new circuit. Returns the parse result                                     |
+| `setQasmCode(code)`                            | Edit as if typed in the code editor (keeps ids of untouched gates)                           |
+| `exportQasm()`                                 | Current circuit as OpenQASM                                                                  |
+| `setEditingGate(gate)`                         | Open (`gate`) or close (`null`) the gate editor                                              |
+| `simulate(shots?, profile?)`                   | Run on the main adapter (see [Adapter Availability](#adapter-availability))                  |
+| `submitHardwareJob({ backend, shots? })`       | Queue the current circuit on a real device (see [Real Hardware](#real-hardware-ibm-quantum)) |
+| `cancelHardwareJob()` / `dismissHardwareJob()` | Cancel the queued/running job / stop tracking a finished one                                 |
+| `refreshHardwareJob()`                         | Poll the job now (e.g. after reconnecting)                                                   |
 
 ### Editing Gates
 
@@ -428,6 +475,7 @@ onCircuitEdit={({ action, reverts, changes }) => {
 > - `simulate()` waits for the availability check instead of failing right after mount, and reports an unavailable adapter through `error` / `onSimulationError` as well as by rejecting.
 > - `SimulationCompleteEvent` has a required `source` field. Code that constructs these events itself (e.g. in tests) must set it.
 > - A preset inside your own `ThemeProvider` now uses it instead of creating its own.
+> - `SimulationSource` (and `resultSource`) has a new value, `'hardware'`. Exhaustive `switch` statements over it need a new case.
 
 <!-- ### Adapters
 

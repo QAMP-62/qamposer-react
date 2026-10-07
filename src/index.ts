@@ -60,6 +60,7 @@ export type { Theme } from './context/ThemeContext';
 export { qiskitAdapter } from './adapters/qiskit';
 export { noopAdapter } from './adapters/noop';
 export { localAdapter } from './adapters/local';
+export { HardwareRequestError } from './adapters/errors';
 export type { QiskitAdapterConfig } from './adapters/types';
 export type { LocalAdapterConfig } from './adapters/local';
 
@@ -94,6 +95,13 @@ export type {
   Displacement,
   QSpherePoint,
   SimulationAdapter,
+  HardwareProvider,
+  HardwareSession,
+  HardwareDevice,
+  HardwareUsage,
+  HardwareJob,
+  HardwareJobInfo,
+  HardwareJobStatus,
   // Provider types
   QamposerProviderProps,
   QamposerContextValue,
